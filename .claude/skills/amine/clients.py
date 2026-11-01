@@ -24,4 +24,26 @@ replicate = _replicate.Client(
     **({"transport": httpx.HTTPTransport(proxy=_proxy)} if _proxy else {}),
 )
 
+# Les modèles "officiels" (ex. black-forest-labs/flux-schnell) renvoient "version": null,
+# que le SDK 1.0.7 refuse (erreur "none is not an allowed value"). On rend le champ optionnel.
+from replicate.prediction import Prediction as _Prediction
+
+_field = _Prediction.__fields__["version"]
+_field.required = False
+_field.allow_none = True
+
 GROQ_MODEL = "openai/gpt-oss-120b"
+
+
+def telecharger(sortie, chemin):
+    """Enregistre une sortie Replicate (FileOutput ou URL) dans `chemin`.
+
+    Ne pas utiliser `sortie.read()` : le SDK envoie l'en-tête Authorization au
+    stockage des fichiers générés, qui répond 400. On télécharge l'URL sans clé.
+    """
+    url = getattr(sortie, "url", None) or str(sortie)
+    r = httpx.get(url, follow_redirects=True, timeout=120)
+    r.raise_for_status()
+    with open(chemin, "wb") as f:
+        f.write(r.content)
+    return chemin
