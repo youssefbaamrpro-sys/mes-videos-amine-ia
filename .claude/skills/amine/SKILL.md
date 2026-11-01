@@ -18,7 +18,11 @@ Toujours passer par `clients.py` (dans ce dossier), qui gère les clés factices
 
 ```python
 import sys; sys.path.insert(0, ".claude/skills/amine")
-from clients import elevenlabs, groq, replicate, GROQ_MODEL
+from clients import elevenlabs, groq, replicate, telecharger, GROQ_MODEL
+
+sortie = replicate.run("black-forest-labs/flux-schnell",
+                       input={"prompt": "...", "aspect_ratio": "9:16", "output_format": "png"})
+telecharger(sortie[0], "image.png")
 ```
 
 ## Pièges connus
@@ -26,6 +30,10 @@ from clients import elevenlabs, groq, replicate, GROQ_MODEL
 - **Replicate** : le SDK ignore `HTTPS_PROXY` (il crée son propre transport httpx), d'où des erreurs 401.
   `clients.py` corrige ça. Si tu crées un client à la main :
   `replicate.Client(api_token="dummy", transport=httpx.HTTPTransport(proxy=os.environ["HTTPS_PROXY"]))`.
+- **Replicate `version: null`** : le SDK 1.0.7 plante (« none is not an allowed value ») sur les modèles
+  officiels comme `flux-schnell`. `clients.py` applique un correctif.
+- **Replicate téléchargement 400** : ne pas utiliser `sortie.read()` (le SDK envoie la clé au stockage,
+  qui refuse). Utiliser `telecharger(sortie, chemin)`.
 - **Replicate 402 "Insufficient credit"** : le compte doit être crédité sur https://replicate.com/account/billing.
 - **Groq** : `llama-3.1-8b-instant` n'est pas disponible sur ce compte. Utiliser `openai/gpt-oss-120b`
   (ou `openai/gpt-oss-20b`). Liste : `groq.models.list()`.
