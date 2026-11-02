@@ -5,7 +5,7 @@ SR=48000; MODEL=sys.argv[1] if len(sys.argv)>1 else "sync/lipsync-2-pro"
 shots=json.load(open("shots.json"))
 c=httpx.Client(proxy=os.environ.get("HTTPS_PROXY"), timeout=300, verify="/root/.ccr/ca-bundle.crt")
 H={"Authorization":"Bearer dummy"}
-raw=subprocess.check_output(["ffmpeg","-v","error","-i","voice_fr4.wav","-f","s16le","-ac","1","-ar",str(SR),"-"])
+raw=subprocess.check_output(["ffmpeg","-v","error","-i","dub_final.wav","-f","s16le","-ac","1","-ar",str(SR),"-"])
 A=np.frombuffer(raw,np.int16)
 def up(p,ct):
     r=c.post("https://api.replicate.com/v1/files",headers=H,files={"content":(os.path.basename(p),open(p,"rb"),ct)}); r.raise_for_status(); return r.json()["urls"]["get"]

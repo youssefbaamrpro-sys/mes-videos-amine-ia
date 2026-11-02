@@ -28,6 +28,7 @@ SPECS = [
  (72.5, 74.4, "red", 444, 486, 0, 360, "D'ATTENTE"),
  (74.3, 78.7, "orange", 338, 378, 0, 140, "LÉSIONS CÉRÉBRALES"),
  (74.3, 78.7, "red", 278, 316, 0, 138, "ÉVANOUISSEMENT"),
+ (78.5, 80.3, "navy", 395, 450, 0, 360, "2 CHOSES"),
  (79.8, 84.5, "navy", 510, 552, 0, 360, "ALARME BIEN AVANT 70 PPM"),
  (87.5, 91.0, "navy", 510, 552, 0, 360, "PAS QUE LE CO"),
  (103.0, 105.5, "green", 412, 456, 0, 360, "4 FONCTIONS ESSENTIELLES"),
@@ -35,7 +36,7 @@ SPECS = [
  (105.4, 107.2, "green", 498, 542, 0, 360, "CAPTEUR GRADE 3"),
  (112.8, 115.8, "green", 496, 542, 0, 360, "ALERTE PRÉCOCE"),
  (115.8, 122.7, "navy", 104, 152, 0, 360, "4 CAPTEURS"),
- (117.5, 122.7, "red", 310, 352, 0, 360, "MONOXYDE DE CARBONE"),
+ (116.6, 122.7, "red", 310, 352, 0, 360, "MONOXYDE DE CARBONE"),
  (118.0, 122.7, "green", 352, 394, 0, 360, "GAZ NATUREL"),
  (118.7, 122.7, "green", 395, 437, 0, 360, "PROPANE"),
  (119.8, 122.7, "green", 438, 482, 0, 360, "GAZ INFLAMMABLES"),
@@ -140,13 +141,15 @@ def chunk_at(t, nearest=False):
     return None
 
 NB = json.load(open("navyboxes.json"))
-NO_SUB = [(63.5, 79.0), (102.8, 105.4), (115.8, 122.6), (147.5, 150.1), (166.0, 173.3), (180.3, 182.5)]
+NO_SUB = [(63.5, 78.4), (115.8, 122.6), (147.5, 150.1), (166.0, 173.3), (180.3, 182.5)]
 
 def extend(b, f):
     x0, y0, x1, y1 = b
-    wm = cmask("white", f[int(y0)+4:int(y1)-4])
-    while x1 < W - 1 and wm[:, int(x1):min(W, int(x1) + 18)].any(): x1 += 4
-    while x0 > 1 and wm[:, max(0, int(x0) - 18):int(x0)].any(): x0 -= 4
+    band = f[int(y0)+4:int(y1)-4]
+    wh = cmask("white", band); nv = cmask("navy", band) | wh
+    col_ok = (nv.mean(0) > 0.6) | (wh.sum(0) > 0)
+    while x1 < W - 1 and col_ok[int(x1):min(W, int(x1) + 12)].any() and nv[:, int(x1):min(W, int(x1) + 12)].mean() > 0.35: x1 += 3
+    while x0 > 1 and col_ok[max(0, int(x0) - 12):int(x0)].any() and nv[:, max(0, int(x0) - 12):int(x0)].mean() > 0.35: x0 -= 3
     return [x0, y0, x1, y1]
 
 def rrect(d, box, color, rad):
@@ -211,7 +214,24 @@ def fix_logos(f, t):
         col = tuple(int(v) for v in np.median(sub[m.astype(bool)], axis=0))
         mask = np.zeros((H, W), np.uint8); mask[y0:y1, x0:x1] = cv2.dilate(m, np.ones((3, 3), np.uint8))
         f = cv2.inpaint(np.ascontiguousarray(f), mask, 3, cv2.INPAINT_TELEA)
-        out.append((x, y, w, h, col))
+        out.append((x, y, w, h, col, "Vigilair", 0.95))
+        # small German labels on the device, positioned relative to the logo
+        sc = w / 45.0; cx = x + w / 2; ty = y
+        regs = [(-81, -70, -42, 45, [("Marche", -28), ("Alarme", 0), ("Défaut", 29)], 5.5),
+                (-30, -18, -34, 34, [("Détecteur gaz & CO", 0)], 7.0)]
+        for dy0, dy1, dx0, dx1, words, fh in regs:
+            X0, X1 = int(cx + dx0 * sc), int(cx + dx1 * sc); Y0, Y1 = int(ty + dy0 * sc), int(ty + dy1 * sc)
+            X0, Y0 = max(0, X0), max(0, Y0); X1, Y1 = min(W, X1), min(H, Y1)
+            if X1 - X0 < 6 or Y1 - Y0 < 3: continue
+            sub = f[Y0:Y1, X0:X1].astype(int)
+            lum = sub.mean(2); sat = sub.max(2) - sub.min(2)
+            m2 = ((lum > np.median(lum) + 14) & (sat < 45)).astype(np.uint8)
+            if m2.sum() < 3: continue
+            colr = tuple(int(v) for v in np.median(sub[m2.astype(bool)], axis=0))
+            mk = np.zeros((H, W), np.uint8); mk[Y0:Y1, X0:X1] = cv2.dilate(m2, np.ones((3, 3), np.uint8))
+            f = cv2.inpaint(np.ascontiguousarray(f), mk, 3, cv2.INPAINT_TELEA)
+            for wd, dx in words:
+                out.append((cx + dx * sc - 1, Y0, 2, (Y1 - Y0), colr, wd, fh / max(1, (Y1 - Y0) / sc) ))
     return f, out
 
 def process(f,i):
@@ -219,9 +239,9 @@ def process(f,i):
     f, logos = fix_logos(f, t)
     im = Image.fromarray(f).resize((W * S, H * S), Image.LANCZOS)
     d = ImageDraw.Draw(im)
-    for x, y, w, h, col in logos:
-        fl = font(h * 0.95 * S)
-        d.text(((x + w / 2) * S, (y + h * 0.82) * S), "Vigilair", font=fl, fill=col, anchor="ms")
+    for x, y, w, h, col, word, k in logos:
+        fl = font(h * k * S)
+        d.text(((x + w / 2) * S, (y + h * 0.82) * S), word, font=fl, fill=col, anchor="ms")
     claimed = []
     for sp in SPECS:
         if not (sp[0] <= t <= sp[1]): continue
