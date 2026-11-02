@@ -37,7 +37,7 @@ SPECS = [
  (280.2, 285.0, "red",   436, 474, 0, 360, "MOINS 60 % SUR 3 DÉTECTEURS"),
  (280.2, 285.0, "blue",  490, 528, 0, 360, "LIEN EN BAS"),
 ]
-NO_SUB = [(140.0, 142.4), (242.6, 253.2), (257.9, 264.0), (280.2, 285.0)]
+NO_SUB = [(140.0, 142.4), (280.2, 285.0)]
 def cmask(name, f):
     r, g, b = [f[..., c].astype(int) for c in range(3)]
     if name == "navy":   return (b > 22) & (b < 120) & (r < 60) & (g < 55) & (b - r > 15)
@@ -173,7 +173,7 @@ TPL = {
 }
 SCALES = {"row": np.geomspace(0.35, 2.6, 34), "gas": np.geomspace(0.25, 2.2, 34), "logo": np.geomspace(0.5, 3.2, 34)}
 DEV_WIN = (0, 0)
-DEV_SHOTS = [(175.13, 179.23), (213.7, 220.4), (226.3, 236.1), (248.7, 253.1), (280.3, 284.9)]
+DEV_SHOTS = [(171.43, 173.17), (175.13, 179.23), (181.67, 185.3), (213.7, 220.4), (226.3, 236.1), (248.7, 253.1), (280.3, 284.9)]
 
 def device_fix(f):
     g = cv2.cvtColor(np.ascontiguousarray(f), cv2.COLOR_RGB2GRAY).astype(np.float32)
@@ -323,6 +323,8 @@ KEYS = [  # (début, fin, t_clé, [(élément, cx, cy, largeur)])  — positions
     (213.7, 215.6, 214.5, [("row", 182, 378, 105), ("gas", 182, 453, 85), ("logo", 182, 493, 60)]),
     (215.6, 218.1, 216.8, [("row", 184, 165, 67), ("gas", 177, 209.5, 47), ("logo", 179, 234.5, 31)]),
     (218.1, 220.4, 219.3, [("row", 186, 452, 228), ("gas", 183, 581, 165)]),
+    (171.43, 173.17, 172.3, [("row", 182, 315, 100), ("gas", 181, 377, 72), ("logo", 182, 415, 48)]),
+    (181.67, 185.3, 183.5, [("row", 182, 327, 100), ("gas", 187, 392, 86), ("logo", 184, 431, 53)]),
     (175.13, 177.0, 175.6, [("row", 165, 335, 140), ("gas", 165, 404, 100), ("logo", 165, 445, 65)]),
     (226.4, 230.7, 228.5, [("row", 180, 367, 72), ("gas", 180, 406, 54), ("logo", 180, 427, 36)]),
     (230.7, 232.17, 231.0, [("row", 178, 357, 55), ("gas", 182, 395, 46), ("logo", 184, 420, 33)]),
@@ -446,10 +448,7 @@ def stable_device(f, i):
         w = wb * 1.15; h = 1.9 * hh
         x0, x1 = int(max(0, cx - w / 2)), int(min(W, cx + w / 2)); y0, y1 = int(max(0, cy - h / 2)), int(min(H, cy + h / 2))
         if x1 - x0 < 3 or y1 - y0 < 3: continue
-        sub = f[y0:y1, x0:x1].astype(int)
-        lum = sub.mean(2); sat = sub.max(2) - sub.min(2)
-        m = ((lum > np.median(lum) + 8) & (sat < 60)).astype(np.uint8)
-        mask[y0:y1, x0:x1] |= cv2.dilate(m, np.ones((5, 5), np.uint8))
+        mask[y0:y1, x0:x1] = 1
         draws.append((cx, cy, wd, hh, tuple(col)))
     if mask.any():
         f = cv2.inpaint(np.ascontiguousarray(f), mask, 3, cv2.INPAINT_TELEA)
@@ -632,6 +631,11 @@ def process(f, i):
         draw_label(d, box, col, sp[7], big=(sp[2] == "whitebg" or sp[7] == "25 000"))
     txt = chunk_at(t)
     k, run = run_at(i)
+    for b in sub_boxes(f, i):   # sous-titres allemands secondaires : recouverts aussi
+        if run is not None:
+            rb = run[2]
+            if not (b[3] < rb[1] - 4 or b[1] > rb[3] + 4): continue
+        rrect(d, (b[0] * S - 2, b[1] * S - 2, b[2] * S + 2, b[3] * S + 2), NAVY, min(9 * S, (b[3] - b[1]) * S * 0.28))
     if run is not None:
         sub_draw(d, k, run, txt or prev_chunk(t) or "")
         STATE["run"] = (k, run); STATE["bt"] = t
