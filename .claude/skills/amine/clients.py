@@ -47,3 +47,49 @@ def telecharger(sortie, chemin):
     with open(chemin, "wb") as f:
         f.write(r.content)
     return chemin
+
+
+def televerser(chemin, type_mime):
+    """Téléverse un fichier sur Replicate (API files) et renvoie son URL.
+
+    Passer un fichier ouvert à `replicate.run` échoue souvent en 502 sur les
+    gros fichiers (vidéo, audio long) : on téléverse d'abord, puis on passe l'URL.
+    """
+    r = httpx.post(
+        "https://api.replicate.com/v1/files",
+        headers={"Authorization": "Bearer dummy"},
+        files={"content": (os.path.basename(chemin), open(chemin, "rb"), type_mime)},
+        proxy=_proxy, timeout=300,
+    )
+    r.raise_for_status()
+    return r.json()["urls"]["get"]
+
+
+def lancer(modele, entrees, version=None, attente=10, max_essais=6):
+    """Crée une prédiction Replicate (gère le 429) et attend la fin. Renvoie la sortie.
+
+    `modele` = "owner/name" (modèle officiel) ; `version` = hash pour les modèles communautaires.
+    Lève une erreur claire en cas de 402 (crédit insuffisant).
+    """
+    import time
+    h = {"Authorization": "Bearer dummy"}
+    c = httpx.Client(proxy=_proxy, timeout=120)
+    url = ("https://api.replicate.com/v1/predictions" if version
+           else f"https://api.replicate.com/v1/models/{modele}/predictions")
+    body = {"input": entrees, **({"version": version} if version else {})}
+    for _ in range(max_essais):
+        r = c.post(url, headers=h, json=body)
+        if r.status_code != 429:
+            break
+        time.sleep(12)
+    if r.status_code == 402:
+        raise RuntimeError("Replicate : crédit insuffisant (402). Ajouter du crédit sur replicate.com/account/billing.")
+    r.raise_for_status()
+    pid = r.json()["id"]
+    while True:
+        d = c.get(f"https://api.replicate.com/v1/predictions/{pid}", headers=h).json()
+        if d["status"] == "succeeded":
+            return d["output"]
+        if d["status"] in ("failed", "canceled"):
+            raise RuntimeError(f"Replicate {pid} : {d['status']} {d.get('error')}")
+        time.sleep(attente)

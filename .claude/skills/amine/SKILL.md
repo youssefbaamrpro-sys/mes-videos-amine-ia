@@ -18,7 +18,7 @@ Toujours passer par `clients.py` (dans ce dossier), qui gère les clés factices
 
 ```python
 import sys; sys.path.insert(0, ".claude/skills/amine")
-from clients import elevenlabs, groq, replicate, telecharger, GROQ_MODEL
+from clients import elevenlabs, groq, replicate, telecharger, televerser, lancer, GROQ_MODEL
 
 sortie = replicate.run("black-forest-labs/flux-schnell",
                        input={"prompt": "...", "aspect_ratio": "9:16", "output_format": "png"})
@@ -37,6 +37,39 @@ telecharger(sortie[0], "image.png")
 - **Replicate 402 "Insufficient credit"** : le compte doit être crédité sur https://replicate.com/account/billing.
 - **Groq** : `llama-3.1-8b-instant` n'est pas disponible sur ce compte. Utiliser `openai/gpt-oss-120b`
   (ou `openai/gpt-oss-20b`). Liste : `groq.models.list()`.
+- **Replicate 502 avec un fichier local** : `replicate.run(..., input={"audio": open(...)})` échoue sur
+  les gros fichiers. Utiliser `televerser(chemin, type)` puis passer l'URL ; `lancer(modele, entrees)`
+  crée la prédiction, gère le 429 (limite à 1 requête/10 s quand le crédit est < 5 $) et attend la fin.
+- **Replicate `Prefer: wait`** : provoque « upstream request failed » via le proxy. Toujours sonder.
+- **Modèles communautaires** (ex. `ryan5453/demucs`, `cjwbw/demucs`) : il faut le hash de version
+  (`/v1/models/<owner>/<name>` → `latest_version.id`). `ryan5453/demucs` est resté bloqué une fois
+  en « processing » 35 min (facturé) : préférer `cjwbw/demucs` (stems bass/drums/other/vocals).
+- **ElevenLabs Starter** : `output_format` 192 kbps refusé (403) → utiliser `mp3_44100_128`.
+- **Transcription Groq** : les horodatages ignorent le silence de début de fichier. Transcrire
+  chaque clip TTS séparément puis ajouter son décalage, pas la piste montée entière.
+- **Mixage de voix** : ne pas monter avec `adelay`+`amix` (piste tronquée/décalée constatée) :
+  assembler en numpy (voir `pipeline/02_voix_fr.py`).
+
+## Traduire une vidéo existante (pipeline)
+
+Pour traduire une vidéo avec sous-titres incrustés **sans Vmake** (qui laisse du flou quand les
+sous-titres ont un fond) : on pose le texte traduit par-dessus, avec un fond opaque identique.
+
+1. `cjwbw/demucs` → `bg.wav` (bass+drums+other) et `vocals` ; cloner la voix (ElevenLabs IVC) à partir
+   des **vocals isolées** (≥ 2 min), pas du mix.
+2. Transcrire (Groq `whisper-large-v3`, mots horodatés), traduire en gardant chaque phrase dans le
+   créneau de l'original → `script_fr.json` (`[début, fin, texte]`).
+3. `pipeline/01_detect_soustitres.py` : repère les bandeaux de sous-titres par image (`navyboxes.json`).
+4. `pipeline/02_voix_fr.py` : voix générée **par passages de ~15 s** (pas phrase par phrase, sinon
+   coupures), `speed` ≈ 0,86–0,9 pour coller au débit de l'original, fondus 20 ms, sans coupe sèche.
+5. `pipeline/03_rendu.py` : sous-titres/étiquettes FR par-dessus (liste `SPECS` à adapter à chaque
+   vidéo), remplacement du logo produit, rendu 720×1280. Vérifier avec `test_rendu.py` (planche d'images).
+6. `pipeline/04_lipsync.py` : `sync/lipsync-2-pro` **plan par plan** (jamais tous les plans collés,
+   sinon visage déformé aux raccords). Ne recoller que le haut de l'image (visage) pour garder les
+   sous-titres du rendu final.
+
+Coûts (Replicate) : lip-sync ~0,05 $/s (standard) à ~0,08 $/s (pro) de vidéo. **Faire valider la voix
+sur une version sans lip-sync avant de lancer le lip-sync**, pour ne le payer qu'une fois.
 
 ## Exemple de montage (image fixe + voix, format vertical)
 
