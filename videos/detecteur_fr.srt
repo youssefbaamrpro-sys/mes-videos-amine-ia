@@ -1,13 +1,13 @@
 1
-00:00:00,120 --> 00:00:04,823
+00:00:06,100 --> 00:00:10,804
 Si là, maintenant, tu étais intoxiqué au monoxyde de carbone chez toi… tu ferais quoi ?
 
 2
-00:00:11,800 --> 00:00:20,412
+00:00:11,800 --> 00:00:20,413
 Je suis pompier. Le pire avec le monoxyde de carbone, c'est que l'endroit où tu te sens en sécurité se remplit en silence d'un gaz toxique.
 
 3
-00:00:21,699 --> 00:00:26,596
+00:00:21,700 --> 00:00:26,596
 Chaque hiver, il tue des milliers de gens, surtout des enfants et des personnes âgées.
 
 4
@@ -19,23 +19,23 @@ Incolore, inodore, sans goût.
 Et c'est en hiver qu'il tue le plus.
 
 6
-00:00:33,000 --> 00:00:34,069
+00:00:33,000 --> 00:00:34,070
 Les chaudières repartent.
 
 7
-00:00:34,299 --> 00:00:36,241
+00:00:34,300 --> 00:00:36,241
 On rallume les poêles après des mois.
 
 8
-00:00:37,100 --> 00:00:38,077
+00:00:37,100 --> 00:00:38,078
 Le fioul chauffe.
 
 9
-00:00:38,600 --> 00:00:41,274
+00:00:38,600 --> 00:00:41,275
 Chaque année, on sort des centaines de familles.
 
 10
-00:00:41,399 --> 00:00:43,235
+00:00:41,400 --> 00:00:43,235
 Et ces dangers sont invisibles à l'œil nu.
 
 11
@@ -43,19 +43,19 @@ Et ces dangers sont invisibles à l'œil nu.
 Le CO se fixe au sang 200 fois plus que l'oxygène.
 
 12
-00:00:48,200 --> 00:00:50,755
+00:00:48,200 --> 00:00:50,756
 Tes organes s'asphyxient, alors que tu respires.
 
 13
-00:00:51,399 --> 00:00:55,706
+00:00:51,400 --> 00:00:55,706
 Et quand ton cerveau comprend le danger, il ne peut souvent plus décider de fuir.
 
 14
-00:00:56,100 --> 00:00:57,270
+00:00:56,100 --> 00:00:57,271
 Ce que peu de gens savent :
 
 15
-00:00:57,500 --> 00:01:01,622
+00:00:57,500 --> 00:01:01,623
 les détecteurs de grande surface ou d'Amazon ne sont pas faits pour te sauver.
 
 16
@@ -67,31 +67,31 @@ Juste pour respecter la norme.
 Selon la norme EN 50291, il peut rester muet jusqu'à 70 ppm.
 
 18
-00:01:10,799 --> 00:01:13,562
+00:01:10,800 --> 00:01:13,563
 Et même là, attendre quatre heures avant de sonner.
 
 19
-00:01:14,400 --> 00:01:17,645
+00:01:14,400 --> 00:01:17,646
 Le cerveau est touché dès 30 ppm. À 50, on s'évanouit.
 
 20
-00:01:18,799 --> 00:01:20,004
+00:01:18,800 --> 00:01:20,005
 Il te faut deux choses.
 
 21
-00:01:20,124 --> 00:01:50,967
+00:01:20,125 --> 00:01:50,967
 Un : un détecteur qui sonne bien avant 70 ppm, tant que vous pouvez encore sortir seuls. Deux : un détecteur qui repère aussi le gaz naturel et le propane, qui peuvent fuir de ta chaudière, ta gazinière ou ton chauffe-eau. C'est pour ça que je te montre le Schutzix 4 en 1. Quatre fonctions en un appareil. Capteur de grade 3. Il affiche la vraie valeur dès 1 ppm. Zéro, c'est sûr. Au-dessus, tu le vois. Alerte précoce, bien avant les seuils mortels.
 
 22
-00:01:55,299 --> 00:02:03,581
+00:01:55,300 --> 00:02:03,581
 Quatre capteurs : monoxyde de carbone, gaz naturel, propane et gaz inflammables. Un seul écran.
 
 23
-00:02:03,701 --> 00:02:07,582
+00:02:03,701 --> 00:02:07,583
 Une fissure dans la chaudière, ou un poêle qui refoule les fumées dans le salon.
 
 24
-00:02:08,000 --> 00:02:12,309
+00:02:08,000 --> 00:02:12,310
 Tu le branches, 30 secondes, c'est prêt. Sans électricien, sans échelle, sans Wi-Fi.
 
 25
@@ -107,19 +107,19 @@ L'intoxication arrive sans bruit. Un petit souci sur ton poêle, ta chaudière o
 Ce jour-là, seule la préparation peut sauver ta famille.
 
 28
-00:02:34,699 --> 00:02:37,720
+00:02:34,700 --> 00:02:37,720
 Pour toi, tes enfants, tes parents, ceux que tu aimes.
 
 29
-00:02:38,900 --> 00:02:40,900
+00:02:38,900 --> 00:02:40,901
 On espère ne jamais s'en servir.
 
 30
-00:02:41,699 --> 00:02:44,642
+00:02:41,700 --> 00:02:44,642
 Mais si le pire arrive, tu seras content de l'avoir.
 
 31
-00:02:45,199 --> 00:02:48,281
+00:02:45,200 --> 00:02:48,282
 En ce moment, jusqu'à moins 50 % sur le pack famille.
 
 32
@@ -135,5 +135,5 @@ Pas satisfait ? Remboursé.
 En hiver, souvent en rupture.
 
 35
-00:02:55,099 --> 00:02:58,428
+00:02:55,100 --> 00:02:58,428
 Clique en bas pour réserver ton pack famille tant qu'il en reste.
