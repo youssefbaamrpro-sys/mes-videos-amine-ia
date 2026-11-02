@@ -125,7 +125,7 @@ CH = []
 for i, c in enumerate(chunks):
     s = c[0]["s"]; e = c[-1]["e"]
     nxt = chunks[i + 1][0]["s"] if i + 1 < len(chunks) else 1e9
-    e2 = nxt if nxt - e < 0.7 else e + 0.3
+    e2 = nxt if nxt - e < 2.5 else e + 0.4
     txt = " ".join(x["w"] for x in c)
     txt = re.sub(r"[,.;…]+$", "", txt)
     txt = re.sub(r"^(Un|Deux) un ", r"\1 : un ", txt)
@@ -243,7 +243,10 @@ def process(f,i):
         if pb is not None and t - STATE.get('bt', -9) < 0.5 and abs(pb[1] - box[1]) < 15:
             box = [min(box[0], pb[0]), min(box[1], pb[1]), max(box[2], pb[2]), max(box[3], pb[3])] if t - STATE.get('bt', -9) < 0.1 else box
         STATE['box'] = box; STATE['bt'] = t
-        if txt is None: txt = chunk_at(t, nearest=True)
+        if txt is None:
+            prevc = [c for c in CH if c[0] <= t]
+            txt = prevc[-1][2] if prevc else ""
+
         # le fond français couvre toujours entièrement l'allemand
         draw_label(d, box, NAVY, txt)
         for b2 in subs:

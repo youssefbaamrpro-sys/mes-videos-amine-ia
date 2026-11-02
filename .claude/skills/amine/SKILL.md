@@ -77,3 +77,13 @@ sur une version sans lip-sync avant de lancer le lip-sync**, pour ne le payer qu
 ffmpeg -y -loop 1 -i image.png -i voix.mp3 -vf "scale=720:1280,format=yuv420p" \
   -c:v libx264 -tune stillimage -c:a aac -shortest video.mp4
 ```
+
+## Voix la plus fidèle : doublage ElevenLabs
+
+Pour garder la voix **et l'intonation** de l'orateur d'origine, préférer le doublage
+(`POST /v1/dubbing`, `source_lang`, `target_lang`, `num_speakers=1`, `watermark=false`) au clone + TTS.
+Coût constaté : ~840 crédits pour 3 min. Le résultat inclut la musique de fond.
+L'API d'édition des segments (`/v1/dubbing/resource/...`) est en bêta fermée : on ne peut pas
+imposer son texte. Pour changer un mot (ex. nom de produit), remplacer le mot **dans l'audio source**
+avant le doublage (voix isolée Demucs + TTS du clone en langue source à l'emplacement du mot).
+Les sous-titres se recalent ensuite sur la transcription Groq du doublage.
