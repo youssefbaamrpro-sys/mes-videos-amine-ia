@@ -107,26 +107,29 @@ def white_box_text(d, tb, txt, weight=500, fsize=None, pad=(8, 6), minbox=None):
 # ---------------- textes de l'appareil ----------------
 f166 = np.array(Image.open("f166.png").convert("L")).astype(np.float32)
 f190 = np.array(Image.open("f190.png").convert("L")).astype(np.float32)
+f152 = np.array(Image.open("f152.png").convert("L")).astype(np.float32)
+f162 = np.array(Image.open("f162.png").convert("L")).astype(np.float32)
 TPL = {
-    "row": (f166[429:450, 70:300], [("Marche", 0.12), ("Alarme", 0.47), ("Défaut", 0.84)]),
-    "gas": (f166[553:577, 100:264], [("Détecteur gaz & CO", 0.5)]),
-    "logo": (f190[403:418, 157:206], [("Vigilair", 0.5)]),
+    "row": ([f166[429:450, 70:300], f152[325:341, 130:235]], [("Marche", 0.12), ("Alarme", 0.47), ("Défaut", 0.84)]),
+    "gas": ([f166[553:577, 100:264], f152[388:404, 140:220], f190[369:385, 142:210]], [("Détecteur gaz & CO", 0.5)]),
+    "logo": ([f190[403:418, 157:206], f152[425:443, 155:208], f162[408:421, 150:210]], [("Vigilair", 0.5)]),
 }
-SCALES = {"row": np.geomspace(0.18, 1.45, 30), "gas": np.geomspace(0.2, 1.4, 30), "logo": np.geomspace(0.6, 4.2, 30)}
-DEV_WIN = (148.0, 213.4)
+SCALES = {"row": np.geomspace(0.35, 2.6, 34), "gas": np.geomspace(0.25, 2.2, 34), "logo": np.geomspace(0.5, 3.2, 34)}
+DEV_WIN = (150.7, 213.4)
+DEV_SHOTS = [(150.7, 170.6), (174.2, 175.3), (177.7, 179.1), (183.8, 186.5), (189.6, 192.0), (208.0, 213.4)]
 
 def device_fix(f):
     g = cv2.cvtColor(np.ascontiguousarray(f), cv2.COLOR_RGB2GRAY).astype(np.float32)
     draws = []; mask = np.zeros((H, W), np.uint8)
-    for k, (tp, words_) in TPL.items():
+    for k, (tps, words_) in TPL.items():
         best = None
-        for sc in SCALES[k]:
-            t = cv2.resize(tp, None, fx=sc, fy=sc, interpolation=cv2.INTER_AREA)
+        for tp, sc in [(tp, sc) for tp in tps for sc in SCALES[k]]:
+            t = cv2.resize(tp, None, fx=sc, fy=sc, interpolation=cv2.INTER_AREA if sc < 1 else cv2.INTER_LINEAR)
             if t.shape[0] < 4 or t.shape[1] < 14 or t.shape[0] >= H or t.shape[1] >= W: continue
             res = cv2.matchTemplate(g, t, cv2.TM_CCOEFF_NORMED)
             _, mv, _, ml = cv2.minMaxLoc(res)
             if best is None or mv > best[0]: best = (mv, ml[0], ml[1], t.shape[1], t.shape[0])
-        thr = {"row": 0.42, "gas": 0.5, "logo": 0.68}[k]
+        thr = {"row": 0.45, "gas": 0.5, "logo": 0.6}[k]
         if best is None or best[0] < thr: continue
         mv, x, y, w, h = best
         if k == "gas": STATE["gas"] = (x, y, w, h)
@@ -140,6 +143,31 @@ def device_fix(f):
         hh = h * (0.62 if k != "row" else 0.55)
         for wd, rx in words_:
             draws.append((x + w * rx, y + h / 2, wd, hh, col))
+    # "Gas & CO-Melder" : cherché au-dessus du logo s'il n'a pas été reconnu
+    lg = [dw for dw in draws if dw[2] == "Vigilair"]
+    if lg and not any(dw[2] == "Détecteur gaz & CO" for dw in draws):
+        lx, ly, _, lh, _ = lg[0]
+        lw = lh / 0.62 * 3.3   # largeur approx. du logo
+        X0, X1 = int(lx - 0.95 * lw), int(lx + 0.95 * lw)
+        Y0, Y1 = int(ly - 1.15 * lw), int(ly - 0.35 * lw)
+        X0, Y0 = max(0, X0), max(0, Y0); X1, Y1 = min(W, X1), min(H, Y1)
+        if X1 - X0 > 10 and Y1 - Y0 > 6:
+            sub = f[Y0:Y1, X0:X1].astype(int)
+            lum = sub.mean(2); sat = sub.max(2) - sub.min(2)
+            m = ((lum > np.median(lum) + 14) & (sat < 55)).astype(np.uint8)
+            ys, xs = np.where(m)
+            if len(xs) > 8:
+                rows = np.bincount(ys, minlength=m.shape[0])
+                cy = int(np.argmax(np.convolve(rows, np.ones(5), "same")))
+                band = (ys > cy - 6) & (ys < cy + 6)
+                if band.sum() > 6:
+                    bx0, bx1 = xs[band].min(), xs[band].max()
+                    by0, by1 = max(0, cy - 6), min(m.shape[0], cy + 6)
+                    mm = np.zeros((H, W), np.uint8)
+                    mm[Y0 + by0:Y0 + by1, X0 + bx0:X0 + bx1 + 1] = m[by0:by1, bx0:bx1 + 1]
+                    mask |= cv2.dilate(mm, np.ones((3, 3), np.uint8))
+                    col = tuple(int(v) for v in np.median(sub[m.astype(bool)], axis=0))
+                    draws.append((X0 + (bx0 + bx1) / 2, Y0 + cy, "Détecteur gaz & CO", max(4, (bx1 - bx0) * 0.11), col))
     # logo coupé en bas d'image sur les très gros plans : déduit de la position de "Gas & CO"
     gz = STATE.pop("gas", None)
     if gz and gz[2] > 110 and not any(dw[2] == "Vigilair" for dw in draws):
@@ -178,15 +206,23 @@ def led_fix(f, t):
     g = (f[..., 1].astype(int) > 170) & (f[..., 0].astype(int) < 170) & (f[..., 1].astype(int) - f[..., 0].astype(int) > 50)
     n, lab, st, cen = cv2.connectedComponentsWithStats(g.astype(np.uint8))
     bl = [(cen[j][0], cen[j][1], st[j][4]) for j in range(1, n) if st[j][4] >= 4]
-    if not bl: return f, []
+    lastled = STATE.get("led")
+    if not bl:
+        if lastled and t - lastled[0] < 0.8: bl = lastled[1]
+        else: return f, []
     single = {0: 1.2, 1: 1.15, 2: 1.4}
     zone = 0 if t < 161 else (1 if 174 < t < 175.3 else (2 if 177.7 < t < 179.0 else None))
     if zone is not None:   # très gros plan : voyant du haut seulement
         L1 = max(bl, key=lambda b: b[2]); L2 = None; s = single[zone]
     else:
-        up = [b for b in bl if b[1] < 540]; lo = [b for b in bl if b[1] >= 560]
-        if not up or not lo: return f, []
-        L1 = max(up, key=lambda b: b[2]); L2 = max(lo, key=lambda b: b[2]); s = (L2[1] - L1[1]) / 140.0
+        bl2 = sorted(bl, key=lambda b: b[1])
+        L1, L2 = bl2[0], bl2[-1]
+        if L2[1] - L1[1] < 40:
+            if lastled and t - lastled[0] < 0.8:
+                bl2 = sorted(lastled[1], key=lambda b: b[1]); L1, L2 = bl2[0], bl2[-1]
+            if L2[1] - L1[1] < 40: return f, []
+        STATE["led"] = (t, [L1, L2])
+        s = (L2[1] - L1[1]) / 140.0
     draws = []; mask = np.zeros((H, W), np.uint8)
     yc = L1[1] - 23 * s
     m, col = _gray_mask(f, L1[0] - 32 * s, yc - 13 * s, L1[0] + 198 * s, yc + 11 * s)
@@ -213,16 +249,90 @@ def led_fix(f, t):
         f = cv2.inpaint(np.ascontiguousarray(f), mask, 3, cv2.INPAINT_TELEA)
     return f, draws
 
+def _subs_for(i, boxes):
+    t = i / FPS
+    claimed = [(a, b) for t0, t1, a, b in CLAIM if t0 <= t <= t1]
+    return [b for b in boxes if not any(a <= b[1] + b[3] / 2 <= c for a, c in claimed)]
+
+def build_runs():
+    path = "runs.json"
+    if os.path.exists(path): return json.load(open(path))
+    p = subprocess.Popen(["ffmpeg", "-v", "error", "-i", "src.mp4", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
+    gb = []; i = 0
+    while True:
+        buf = p.stdout.read(W * H * 3)
+        if len(buf) < W * H * 3: break
+        f = np.frombuffer(buf, np.uint8).reshape(H, W, 3)
+        subs = _subs_for(i, WB[i] if i < len(WB) else [])
+        gb.append(german_box(f, max(subs, key=lambda b: b[2] * b[3])) if subs else None)
+        i += 1
+    runs = []; cur = None
+    for i, b in enumerate(gb):
+        if b is None: continue
+        cy = b[1] + b[3] / 2
+        if cur and i - cur["e"] <= 6 and abs(cy - cur["cy"]) <= 14:
+            cur["e"] = i; cur["boxes"].append(b)
+        else:
+            if cur: runs.append(cur)
+            cur = {"s": i, "e": i, "cy": cy, "boxes": [b]}
+    if cur: runs.append(cur)
+    out = []
+    for r in runs:
+        bs = np.array(r["boxes"])
+        x0 = bs[:, 0].min(); y0 = bs[:, 1].min(); x1 = (bs[:, 0] + bs[:, 2]).max(); y1 = (bs[:, 1] + bs[:, 3]).max()
+        out.append([max(0, r["s"] - 8), r["e"] + 2, [int(x0), int(y0), int(x1 - x0), int(y1 - y0)]])
+    json.dump(out, open(path, "w"))
+    return out
+
+RUNS = None
+RUN_OF = {}
+def run_at(i):
+    global RUNS
+    if RUNS is None:
+        RUNS = build_runs()
+        for k, (s0, e0, b) in enumerate(RUNS):
+            for j in range(s0, e0 + 1): RUN_OF.setdefault(j, k)
+    k = RUN_OF.get(i)
+    return (k, RUNS[k]) if k is not None else (None, None)
+
+RUN_W = {}
+def run_width(d, k, run):
+    if k in RUN_W: return RUN_W[k]
+    s0, e0, b = run
+    texts = set()
+    for j in range(s0, e0 + 1):
+        tt = chunk_at(j / FPS) or prev_chunk(j / FPS)
+        if tt: texts.add(tt)
+    f = font(16.5 * S, 500)
+    tw = max([d.textlength(x, font=f) for x in texts] or [0])
+    RUN_W[k] = min((W - 6) * S, max(b[2] * S, tw + 22 * S))
+    return RUN_W[k]
+
+def stable_box(d, k, run, txt):
+    s0, e0, b = run
+    x, y, w, h = b
+    bw = run_width(d, k, run); bh = max(h * S, 28 * S)
+    cx = (x + w / 2) * S; cy = (y + h / 2) * S
+    x0 = min(max(3 * S, cx - bw / 2), W * S - 3 * S - bw)
+    x0 = min(x0, x * S); x1 = max(x0 + bw, (x + w) * S)
+    box = (x0, cy - bh / 2, x1, cy + bh / 2)
+    rr(d, box, (255, 255, 255), 6 * S)
+    if txt:
+        f = font(16.5 * S, 500)
+        tw = d.textlength(txt, font=f)
+        if tw > (x1 - x0) - 16 * S: f = font(16.5 * S * ((x1 - x0) - 16 * S) / tw, 500)
+        text_center(d, (x0 + x1) / 2, cy, txt, f, (12, 12, 12))
+
 STATE = {"box": None, "bt": -9}
 
 def process(f, i):
     t = i / FPS
     draws = []
-    if 159.2 <= t <= 160.75 or 165.7 <= t <= 169.6 or 174.3 <= t <= 175.15 or 177.85 <= t <= 178.95:
+    if 159.2 <= t <= 160.75 or 160.9 <= t <= 169.6 or 174.3 <= t <= 175.15 or 177.85 <= t <= 178.95:
         FULLRECT[0] = True
         f, draws = led_fix(f, t)
         FULLRECT[0] = False
-    elif DEV_WIN[0] <= t <= DEV_WIN[1]:
+    elif any(a <= t <= b for a, b in DEV_SHOTS):
         f, draws = device_fix(f)
     im = Image.fromarray(f).resize((W * S, H * S), Image.LANCZOS)
     d = ImageDraw.Draw(im)
@@ -262,28 +372,16 @@ def process(f, i):
         text_center(d, 180 * S, 88 * S, "PLUS DE 12 000", font(26 * S, 800), (12, 12, 12))
         text_center(d, 180 * S, 118 * S, "FAMILLES FRANÇAISES", font(13.5 * S, 800), (12, 12, 12))
         text_center(d, 180 * S, 142 * S, "ONT DÉJÀ FRANCHI LE PAS", font(12 * S, 800), (12, 12, 12))
-    # sous-titres
-    def _flt(bs): return [b for b in bs if not any(a <= b[1] + b[3] / 2 <= c for a, c in claimed)]
-    subs = _flt(boxes)
-    if not subs:
-        for k in range(1, 13):
-            if i + k < len(WB) and _flt(WB[i + k]):
-                nb = max(_flt(WB[i + k]), key=lambda b: b[2] * b[3])
-                subs = [[nb[0] - 6, nb[1] - 3, nb[2] + 12, nb[3] + 6]]
-                break
+    # sous-titres (cadre stable sur toute la durée du sous-titre allemand)
     txt = chunk_at(t)
-    if subs:
-        b = max(subs, key=lambda b: b[2] * b[3])
-        if txt is None: txt = prev_chunk(t) or ""
-        STATE["box"] = b; STATE["bt"] = t
-        STATE["gbox"] = german_box(f, b)
-        cover_box(d, STATE["gbox"], txt)
-        for b2 in subs:
-            if b2 is not b: cover_box(d, german_box(f, b2), "")
-    elif txt and STATE["box"] is not None and t - STATE["bt"] < 1.0:
-        sb = STATE["box"]
-        if not any(a - 12 <= sb[1] + sb[3] / 2 <= c + 12 for a, c in claimed):
-            cover_box(d, STATE.get("gbox") or sb, txt)
+    k, run = run_at(i)
+    if run is not None:
+        stable_box(d, k, run, txt or prev_chunk(t) or "")
+        STATE["run"] = (k, run); STATE["bt"] = t
+    elif txt and STATE.get("run") and t - STATE["bt"] < 1.0:
+        kk, rn = STATE["run"]
+        if not any(a - 12 <= rn[2][1] + rn[2][3] / 2 <= c + 12 for a, c in claimed):
+            stable_box(d, kk, rn, txt)
     return im
 
 def main():
