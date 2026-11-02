@@ -249,6 +249,78 @@ def led_fix(f, t):
         f = cv2.inpaint(np.ascontiguousarray(f), mask, 3, cv2.INPAINT_TELEA)
     return f, draws
 
+# ---------- suivi lissé des inscriptions de l'appareil ----------
+WMUL = {"Vigilair": 8.0, "Détecteur gaz & CO": 13.0, "Marche": 6.5, "Alarme": 6.5, "Défaut": 6.5}
+
+def _raw_device(f, t):
+    STATE.pop("gas", None)
+    if 159.2 <= t <= 160.75 or 160.9 <= t <= 169.6 or 174.3 <= t <= 175.15 or 177.85 <= t <= 178.95:
+        _, dr = led_fix(f, t)
+    elif any(a <= t <= b for a, b in DEV_SHOTS):
+        _, dr = device_fix(f)
+    else:
+        dr = []
+    return dr
+
+def build_devtrack():
+    path = "devtrack.json"
+    if os.path.exists(path):
+        return {int(k): v for k, v in json.load(open(path)).items()}
+    p = subprocess.Popen(["ffmpeg", "-v", "error", "-i", "src.mp4", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
+    small = []; raw = {}; i = 0
+    while True:
+        buf = p.stdout.read(W * H * 3)
+        if len(buf) < W * H * 3: break
+        f = np.frombuffer(buf, np.uint8).reshape(H, W, 3)
+        small.append(cv2.resize(f, (45, 80)).astype(np.float32))
+        t = i / FPS
+        if any(a <= t <= b for a, b in DEV_SHOTS):
+            raw[i] = [list(map(float, d[:2])) + [d[2], float(d[3])] + list(d[4]) for d in _raw_device(f, t)]
+        i += 1
+    n = i
+    cuts = [0] + [j for j in range(1, n) if np.abs(small[j] - small[j - 1]).mean() > 22] + [n]
+    out = {}
+    for a, b in zip(cuts, cuts[1:]):
+        frames = [j for j in range(a, b) if j in raw]
+        if not frames: continue
+        words = {}
+        for j in frames:
+            for cx, cy, wd, hh, r, g, bb in raw[j]:
+                words.setdefault(wd, {})[j] = (cx, cy, hh, r, g, bb)
+        for wd, obs in words.items():
+            if len(obs) < max(4, 0.25 * len(frames)): continue
+            js = np.array(sorted(obs)); vals = np.array([obs[j][:3] for j in js])
+            col = tuple(int(v) for v in np.median(np.array([obs[j][3:] for j in js]), axis=0))
+            span = range(min(frames), max(frames) + 1)
+            # médiane glissante puis moyenne glissante, puis interpolation
+            med = np.array([np.median(vals[max(0, k - 7):k + 8], axis=0) for k in range(len(js))])
+            sm = np.array([med[max(0, k - 4):k + 5].mean(axis=0) for k in range(len(js))])
+            for j in span:
+                v = [float(np.interp(j, js, sm[:, c])) for c in range(3)]
+                out.setdefault(j, []).append([v[0], v[1], wd, v[2], col])
+    json.dump(out, open(path, "w"))
+    return out
+
+DEVTRACK = None
+def stable_device(f, i):
+    global DEVTRACK
+    if DEVTRACK is None: DEVTRACK = build_devtrack()
+    els = DEVTRACK.get(i, [])
+    if not els: return f, []
+    mask = np.zeros((H, W), np.uint8); draws = []
+    for cx, cy, wd, hh, col in els:
+        w = WMUL.get(wd, 8) * hh; h = 2.3 * hh
+        x0, x1 = int(max(0, cx - w / 2)), int(min(W, cx + w / 2)); y0, y1 = int(max(0, cy - h / 2)), int(min(H, cy + h / 2))
+        if x1 - x0 < 3 or y1 - y0 < 3: continue
+        sub = f[y0:y1, x0:x1].astype(int)
+        lum = sub.mean(2); sat = sub.max(2) - sub.min(2)
+        m = ((lum > np.median(lum) + 8) & (sat < 60)).astype(np.uint8)
+        mask[y0:y1, x0:x1] |= cv2.dilate(m, np.ones((5, 5), np.uint8))
+        draws.append((cx, cy, wd, hh, tuple(col)))
+    if mask.any():
+        f = cv2.inpaint(np.ascontiguousarray(f), mask, 3, cv2.INPAINT_TELEA)
+    return f, draws
+
 def _subs_for(i, boxes):
     t = i / FPS
     claimed = [(a, b) for t0, t1, a, b in CLAIM if t0 <= t <= t1]
@@ -328,12 +400,8 @@ STATE = {"box": None, "bt": -9}
 def process(f, i):
     t = i / FPS
     draws = []
-    if 159.2 <= t <= 160.75 or 160.9 <= t <= 169.6 or 174.3 <= t <= 175.15 or 177.85 <= t <= 178.95:
-        FULLRECT[0] = True
-        f, draws = led_fix(f, t)
-        FULLRECT[0] = False
-    elif any(a <= t <= b for a, b in DEV_SHOTS):
-        f, draws = device_fix(f)
+    if any(a <= t <= b for a, b in DEV_SHOTS):
+        f, draws = stable_device(f, i)
     im = Image.fromarray(f).resize((W * S, H * S), Image.LANCZOS)
     d = ImageDraw.Draw(im)
     for cx, cy, wd, hh, col in draws:
