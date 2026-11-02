@@ -13,19 +13,10 @@ def font(px, w=500):
     return _fc[key]
 
 # ---------------- sous-titres FR ----------------
-d = json.load(open("tr_dub.json")); p = json.load(open("tr_part.json"))
-words = [w for w in d["words"] if not (96.0 <= w["start"] < 112.2)]
-words += [{"word": w["word"], "start": w["start"] + 96, "end": w["end"] + 96} for w in p["words"] if 96.0 <= w["start"] + 96 < 112.2]
-words.sort(key=lambda w: w["start"])
-FIX = {"Vigilin,": "Vigilair,", "Vigilin": "Vigilair", "point": "poing", "point.": "poing."}
-seq = []
-for w in words:
-    t = FIX.get(w["word"].strip(), w["word"].strip())
-    s = max(w["start"], seq[-1]["s"] + 0.01) if seq else w["start"]
-    seq.append({"w": t, "s": s, "e": max(w["end"], s + 0.05)})
+seq = json.load(open(os.environ.get("WORDS", "words_new.json")))
 chunks = []; cur = []
 for w in seq:
-    if cur and w["w"][:1].isupper() and w["w"] not in ("Vigilair", "Vigilair,", "CO"):
+    if cur and ((w["w"][:1].isupper() and w["w"] not in ("Vigilair", "Vigilair,", "CO", "Vigilair.")) or w.get("blk") != cur[-1].get("blk")):
         chunks.append(cur); cur = []
     cur.append(w)
     txt = " ".join(x["w"] for x in cur)
@@ -35,6 +26,13 @@ for w in seq:
     if not glued and (len(cur) >= 4 or len(txt) >= 20 or re.search(r"[,.;:?!…]$", w["w"])):
         chunks.append(cur); cur = []
 if cur: chunks.append(cur)
+merged = []
+for c in chunks:
+    if merged and len(" ".join(x["w"] for x in c)) <= 3 and c[0].get("blk") == merged[-1][-1].get("blk"):
+        merged[-1] = merged[-1] + c
+    else:
+        merged.append(c)
+chunks = merged
 CH = []
 for i, c in enumerate(chunks):
     s = c[0]["s"]; e = c[-1]["e"]
@@ -61,6 +59,33 @@ def rr(d, box, fill, rad, outline=None, width=0):
 
 def text_center(d, cx, cy, txt, f, fill):
     d.text((cx, cy), txt, font=f, fill=fill, anchor="mm")
+
+def german_box(f, tb):
+    """Étend la boîte de texte allemand jusqu'aux bords de son cadre blanc."""
+    x, y, w, h = [int(v) for v in tb]
+    wm = (f[..., 0] > 225) & (f[..., 1] > 225) & (f[..., 2] > 225)
+    y0, y1 = max(0, y), min(H, y + h)
+    x0, x1 = max(0, x), min(W, x + w)
+    while x0 > 0 and wm[y0:y1, x0 - 1].mean() > 0.6: x0 -= 1
+    while x1 < W and wm[y0:y1, x1].mean() > 0.6: x1 += 1
+    while y0 > 0 and wm[y0 - 1, x0:x1].mean() > 0.6: y0 -= 1
+    while y1 < H and wm[y1, x0:x1].mean() > 0.6: y1 += 1
+    return [x0 - 2, y0 - 2, x1 - x0 + 4, y1 - y0 + 4]
+
+def cover_box(d, gb, txt):
+    """Cadre blanc FR >= cadre allemand complet, texte noir centré."""
+    x, y, w, h = gb
+    f = font(16.5 * S, 500)
+    tw = d.textlength(txt, font=f) if txt else 0
+    if tw > (W - 24) * S:
+        f = font(16.5 * S * (W - 24) * S / tw, 500); tw = (W - 24) * S
+    cx = (x + w / 2) * S; cy = (y + h / 2) * S
+    bw = max(w * S, tw + 20 * S); bh = max(h * S, 28 * S)
+    x0 = min(max(3 * S, cx - bw / 2), W * S - 3 * S - bw)
+    x0 = min(x0, x * S); x1 = max(x0 + bw, (x + w) * S)
+    box = (x0, cy - bh / 2, x1, cy + bh / 2)
+    rr(d, box, (255, 255, 255), 6 * S)
+    if txt: text_center(d, (box[0] + box[2]) / 2, cy, txt, f, (12, 12, 12))
 
 def white_box_text(d, tb, txt, weight=500, fsize=None, pad=(8, 6), minbox=None):
     """tb = boîte de texte allemand (x, y, w, h) en coords source."""
@@ -251,13 +276,14 @@ def process(f, i):
         b = max(subs, key=lambda b: b[2] * b[3])
         if txt is None: txt = prev_chunk(t) or ""
         STATE["box"] = b; STATE["bt"] = t
-        white_box_text(d, b, txt, fsize=16.5)
+        STATE["gbox"] = german_box(f, b)
+        cover_box(d, STATE["gbox"], txt)
         for b2 in subs:
-            if b2 is not b: white_box_text(d, b2, "")
+            if b2 is not b: cover_box(d, german_box(f, b2), "")
     elif txt and STATE["box"] is not None and t - STATE["bt"] < 1.0:
         sb = STATE["box"]
         if not any(a - 12 <= sb[1] + sb[3] / 2 <= c + 12 for a, c in claimed):
-            white_box_text(d, sb, txt, fsize=16.5)
+            cover_box(d, STATE.get("gbox") or sb, txt)
     return im
 
 def main():
