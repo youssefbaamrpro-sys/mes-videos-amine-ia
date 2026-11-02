@@ -22,10 +22,10 @@ SPECS = [
  (140.0, 142.4, "navy", 112, 145, 0, 360, "NORME LÉGALE"),
  (140.0, 142.4, "red", 378, 412, 0, 360, "4 HEURES DE SILENCE"),
  (186.9, 188.4, "green", 38, 76, 0, 360, "ALARME DÈS 30 PPM"),
- (215.4, 218.15, "red",   272, 308, 0, 360, "MONOXYDE DE CARBONE"),
- (215.4, 218.15, "green", 324, 360, 0, 360, "GAZ NATUREL"),
- (215.4, 218.15, "green", 376, 412, 0, 360, "PROPANE"),
- (215.4, 218.15, "green", 427, 463, 0, 360, "GAZ INFLAMMABLES"),
+ (215.6, 218.15, "red",   272, 308, 0, 360, "MONOXYDE DE CARBONE"),
+ (215.6, 218.15, "green", 324, 360, 0, 360, "GAZ NATUREL"),
+ (215.6, 218.15, "green", 376, 412, 0, 360, "PROPANE"),
+ (215.6, 218.15, "green", 427, 463, 0, 360, "GAZ INFLAMMABLES"),
  (242.6, 248.8, "navy",  120, 158, 0, 360, "PLUS DE"),
  (242.6, 248.8, "navy",  162, 224, 0, 360, "25 000"),
  (242.6, 248.8, "navy",  258, 298, 0, 360, "FAMILLES"),
@@ -342,6 +342,26 @@ LINEAR = [  # plan en zoom : interpolation linéaire entre deux relevés manuels
 ]
 HREL = {"row": 0.085, "gas": 0.13, "logo": 0.24}
 
+CUTF = json.load(open("cutframes.json")) if os.path.exists("cutframes.json") else []
+def snap(t):
+    j = int(round(t * FPS))
+    near = [c for c in CUTF if abs(c - j) <= 6]
+    return min(near, key=lambda c: abs(c - j)) if near else j
+def frange(t0, t1):
+    return range(snap(t0), snap(t1))
+
+def _polyfit(js, vals, deg):
+    js = np.asarray(js, float); vals = np.asarray(vals, float)
+    deg = min(deg, max(0, len(js) - 1))
+    w = np.ones(len(js))
+    for _ in range(3):
+        cs = [np.polyfit(js, vals[:, c], deg, w=w) for c in range(vals.shape[1])]
+        fit = np.stack([np.polyval(cc, js) for cc in cs], 1)
+        err = np.abs(fit - vals).max(1)
+        sc = np.median(err) * 3 + 1.0
+        w = np.where(err > sc, 0.05, 1.0)
+    return cs
+
 def _track(frames, k0, cx, cy, w, h):
     g0 = frames[k0]
     x0, y0 = int(cx - w / 2 - 2), int(cy - h / 2 - 2); x1, y1 = int(cx + w / 2 + 2), int(cy + h / 2 + 2)
@@ -353,16 +373,16 @@ def _track(frames, k0, cx, cy, w, h):
         k = k0 + direction
         while 0 <= k < len(frames):
             g = frames[k]; best = None
-            for sc in ps * np.array([0.94, 0.97, 1.0, 1.03, 1.06]):
+            for sc in ps * np.array([0.97, 0.985, 1.0, 1.015, 1.03]):
                 t = cv2.resize(tpl, None, fx=sc, fy=sc, interpolation=cv2.INTER_LINEAR)
-                r = int(0.35 * w * sc + 12)
+                r = int(0.12 * w * sc + 10)
                 X0, Y0 = int(max(0, pcx - t.shape[1] / 2 - r)), int(max(0, pcy - t.shape[0] / 2 - r))
                 X1, Y1 = int(min(W, pcx + t.shape[1] / 2 + r)), int(min(H, pcy + t.shape[0] / 2 + r))
                 win = g[Y0:Y1, X0:X1]
                 if win.shape[0] <= t.shape[0] or win.shape[1] <= t.shape[1]: continue
                 m = cv2.matchTemplate(win, t, cv2.TM_CCOEFF_NORMED); _, mv, _, ml = cv2.minMaxLoc(m)
                 if best is None or mv > best[0]: best = (mv, X0 + ml[0] + t.shape[1] / 2, Y0 + ml[1] + t.shape[0] / 2, sc)
-            if best is not None and best[0] > 0.35:
+            if best is not None and best[0] > 0.25:
                 pcx, pcy, ps = best[1], best[2], best[3]
             res[k] = (pcx, pcy, ps)
             k += direction
@@ -381,7 +401,7 @@ def build_devtrack():
     allf = {}; i = 0
     want = set()
     for t0, t1, *_ in KEYS + LINEAR:
-        want.update(range(int(t0 * FPS), int(t1 * FPS) + 1))
+        want.update(frange(t0, t1))
     while True:
         buf = p.stdout.read(W * H * 3)
         if len(buf) < W * H * 3: break
@@ -389,33 +409,44 @@ def build_devtrack():
         i += 1
     out = {}
     for t0, t1, tk, els in KEYS:
-        idx = [j for j in range(int(t0 * FPS) + 1, int(t1 * FPS)) if j in allf]
+        idx = [j for j in frange(t0, t1) if j in allf]
         if not idx: continue
         gray = [cv2.cvtColor(allf[j], cv2.COLOR_RGB2GRAY).astype(np.float32) for j in idx]
         k0 = min(range(len(idx)), key=lambda q: abs(idx[q] - tk * FPS))
-        for ei, (name, cx, cy, w) in enumerate(els):
+        # un seul gros modèle (écran + façade de l'appareil), beaucoup plus fiable que les petits textes
+        bx0 = min(cx - w / 2 for _, cx, cy, w in els) - 12; bx1 = max(cx + w / 2 for _, cx, cy, w in els) + 12
+        wmax = max(w for _, cx, cy, w in els)
+        by0 = min(cy for _, cx, cy, w in els) - 0.9 * wmax; by1 = max(cy for _, cx, cy, w in els) + 0.15 * wmax
+        bx0, by0 = max(0, bx0), max(0, by0); bx1, by1 = min(W, bx1), min(H, by1)
+        BCX, BCY = (bx0 + bx1) / 2, (by0 + by1) / 2
+        tr = _track(gray, k0, BCX, BCY, bx1 - bx0 - 4, by1 - by0 - 4)
+        seq = np.array([tr[q] for q in range(len(idx))])
+        dur = len(idx) / FPS
+        cs = _polyfit(np.arange(len(idx)), seq, 1 if dur < 2.2 else (2 if dur < 4.5 else 3))
+        sm = np.stack([np.polyval(cc, np.arange(len(idx))) for cc in cs], 1)
+        sm += np.array([BCX, BCY, 1.0]) - sm[k0]
+        f0 = allf[idx[k0]]
+        for name, cx, cy, w in els:
             h = max(5, HREL[name] * w * 1.4)
-            tr = _track(gray, k0, cx, cy, w, h)
-            seq = [tr[q] for q in range(len(idx))]
-            sm = _smooth(seq)
-            # couleur du texte : médiane sur l'image clé
-            f0 = allf[idx[k0]]; sub = f0[int(cy - h / 2):int(cy + h / 2), int(cx - w / 2):int(cx + w / 2)].astype(int)
-            L = sub.mean(2); S_ = sub.max(2) - sub.min(2); mm = (L > np.median(L) + 12) & (S_ < 60)
-            col = [int(v) for v in np.median(sub[mm], axis=0)] if mm.sum() > 3 else [120, 120, 120]
+            sub = f0[int(max(0, cy - h / 2)):int(cy + h / 2), int(max(0, cx - w / 2)):int(cx + w / 2)].astype(int)
+            col = [120, 120, 120]
+            if sub.size:
+                L = sub.mean(2); S_ = sub.max(2) - sub.min(2); mm = (L > np.median(L) + 12) & (S_ < 60)
+                if mm.sum() > 3: col = [int(v) for v in np.median(sub[mm], axis=0)]
             for q, j in enumerate(idx):
-                x, y, sc = sm[q]
-                ww = w * sc
+                gx, gy, sc = sm[q]
+                x = gx + (cx - BCX) * sc; y = gy + (cy - BCY) * sc; ww = w * sc
                 if name == "row":
                     for wd, rx in (("Marche", -0.38), ("Alarme", 0.0), ("Défaut", 0.38)):
                         out.setdefault(j, []).append([x + rx * ww, y, wd, HREL[name] * ww * 1.05, col, ww / 3 + 4])
                 elif name == "gas":
                     out.setdefault(j, []).append([x, y, "Détecteur gaz & CO", HREL[name] * ww * 0.85, col, ww + 6])
-                    if len([e for e in els if e[0] == "logo"]) == 0:   # logo hors champ sur le gros plan : déduit du texte gaz
+                    if len([e for e in els if e[0] == "logo"]) == 0:
                         out.setdefault(j, []).append([x, y + 0.44 * ww, "Vigilair", 0.13 * ww, col, 0.62 * ww])
                 else:
                     out.setdefault(j, []).append([x, y, "Vigilair", HREL[name] * ww * 0.9, col, ww + 6])
     for t0, t1, ta, tb, els in LINEAR:
-        for j in range(int(t0 * FPS) + 1, int(t1 * FPS) + 1):
+        for j in frange(t0, t1):
             u = min(1, max(0, (j / FPS - ta) / (tb - ta)))
             f0 = allf.get(j)
             for name, xa, ya, wa, xb, yb, wb in els:
@@ -595,11 +626,40 @@ def _raw_device(f, t):
                 draws.append((cx, cy, "Vigilair", hl * 1.25) + col + (f"logo#{di}", wl + 8))
     return draws
 
+SPEC_INFO = {}
+def precompute_specs():
+    if os.path.exists("specunion.json"):
+        SPEC_INFO.update({int(k): v for k, v in json.load(open("specunion.json")).items()}); return
+    p = subprocess.Popen(["ffmpeg", "-v", "error", "-i", "src.mp4", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
+    i = 0
+    while True:
+        buf = p.stdout.read(W * H * 3)
+        if len(buf) < W * H * 3: break
+        t = i / FPS
+        act = [(k, sp) for k, sp in enumerate(SPECS) if sp[0] <= t <= sp[1] and sp[2] != "plain"]
+        if act:
+            f = np.frombuffer(buf, np.uint8).reshape(H, W, 3)
+            for k, sp in act:
+                b = spec_box(sp, f)
+                if b is None: continue
+                b = [float(v) for v in b]
+                inf = SPEC_INFO.get(k)
+                area = (b[2] - b[0]) * (b[3] - b[1])
+                if inf is None:
+                    inf = {"box": b, "first": i, "last": i, "area": 0, "col": None}
+                else:
+                    u = inf["box"]; inf["box"] = [min(b[0], u[0]), min(b[1], u[1]), max(b[2], u[2]), max(b[3], u[3])]
+                    inf["last"] = i
+                if area > inf["area"]:
+                    c = median_color(sp[2], f, b); inf["area"] = area; inf["col"] = list(c) if c else None
+                SPEC_INFO[k] = inf
+        i += 1
+    json.dump(SPEC_INFO, open("specunion.json", "w"))
+
 def process(f, i):
     t = i / FPS
     draws = []
-    if any(a <= t <= b for a, b in DEV_SHOTS):
-        f, draws = stable_device(f, i)
+    f, draws = stable_device(f, i)
     plains = []
     for sp in SPECS:
         if sp[2] == "plain" and sp[0] <= t <= sp[1]:
@@ -619,15 +679,10 @@ def process(f, i):
         d.text((cx * S, cy * S), wd, font=fontw(hh * S, 500), fill=tuple(col), anchor="mm")
     for k_, sp in enumerate(SPECS):
         if not (sp[0] <= t <= sp[1]) or sp[2] == "plain": continue
-        box = spec_box(sp, f)
-        if box is None:
-            box = SPEC_UNION.get(k_)
-            if box is None: continue
-        else:
-            u = SPEC_UNION.get(k_)
-            box = box if u is None else [min(box[0], u[0]), min(box[1], u[1]), max(box[2], u[2]), max(box[3], u[3])]
-            SPEC_UNION[k_] = box
-        col = median_color(sp[2], f, box) or NAVY
+        if not SPEC_INFO: precompute_specs()
+        inf = SPEC_INFO.get(k_)
+        if inf is None or not (inf["first"] - 1 <= i <= inf["last"]): continue
+        box = inf["box"]; col = tuple(inf["col"]) if inf["col"] else NAVY
         draw_label(d, box, col, sp[7], big=(sp[2] == "whitebg" or sp[7] == "25 000"))
     txt = chunk_at(t)
     k, run = run_at(i)
