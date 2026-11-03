@@ -329,7 +329,7 @@ KEYS = [  # (début, fin, t_clé, [(élément, cx, cy, largeur)])  — positions
     (226.4, 230.7, 228.5, [("row", 180, 367, 72), ("gas", 180, 406, 54), ("logo", 180, 427, 36)]),
     (230.7, 232.17, 231.0, [("row", 178, 357, 55), ("gas", 182, 395, 46), ("logo", 184, 420, 33)]),
     (233.6, 236.1, 235.0, [("row", 182, 315, 93), ("gas", 179, 385, 68), ("logo", 180, 426, 49)]),
-    (248.7, 253.1, 251.0, [("row", 90, 350, 45), ("gas", 93, 384, 38), ("logo", 91, 406, 28),
+    (248.95, 253.1, 251.0, [("row", 90, 350, 45), ("gas", 93, 384, 38), ("logo", 91, 406, 28),
                            ("row", 182, 350, 60), ("gas", 179, 392, 47), ("logo", 180, 416, 30),
                            ("row", 260, 350, 40), ("gas", 261, 384, 38), ("logo", 264, 406, 24)]),
     (280.3, 284.9, 282.5, [("row", 179, 307, 77), ("gas", 178, 362, 58), ("logo", 180, 392, 40)]),
@@ -666,6 +666,155 @@ def _raw_device(f, t):
                 draws.append((cx, cy, "Vigilair", hl * 1.25) + col + (f"logo#{di}", wl + 8))
     return draws
 
+# ---------- appareil : correction collée aux pixels (alignement ECC affine) ----------
+def _shots():
+    out = []
+    for t0, t1, tk, els in KEYS:
+        out.append((t0, t1, tk, [(n, cx, cy, w) for n, cx, cy, w in els]))
+    for t0, t1, ta, tb, els in LINEAR:
+        out.append((t0, t1, ta, [(n, xa, ya, wa) for n, xa, ya, wa, xb, yb, wb in els]))
+    return out
+
+def _read_frames(want):
+    p = subprocess.Popen(["ffmpeg", "-v", "error", "-i", "src.mp4", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
+    fr = {}; i = 0
+    while True:
+        buf = p.stdout.read(W * H * 3)
+        if len(buf) < W * H * 3: break
+        if i in want: fr[i] = np.frombuffer(buf, np.uint8).reshape(H, W, 3).copy()
+        i += 1
+    return fr
+
+def _elem_rects(els):
+    R = []
+    for name, cx, cy, w in els:
+        if name == "row":
+            hh = HREL[name] * w * 1.05; R.append((name, cx, cy, w + 8, 1.9 * hh, hh))
+        elif name == "gas":
+            hh = HREL[name] * w * 0.85; R.append((name, cx, cy, w + 8, 1.9 * hh, hh))
+        else:
+            hh = HREL[name] * w * 0.9; R.append((name, cx, cy, w + 8, 1.7 * hh, hh))
+    return R
+
+def _ncc(K, F, M, rects):
+    wk = cv2.warpAffine(K, M, (W, H)); out = []
+    for cx, cy, w, h in rects:
+        X, Y = M @ np.array([cx, cy, 1.0], np.float32)
+        x0, x1, y0, y1 = int(X - w / 2), int(X + w / 2), int(Y - h / 2), int(Y + h / 2)
+        if x0 < 0 or y0 < 0 or x1 > W or y1 > H or x1 - x0 < 6 or y1 - y0 < 4: continue
+        A = wk[y0:y1, x0:x1]; B = F[y0:y1, x0:x1]
+        A = A - A.mean(); B = B - B.mean()
+        out.append(float((A * B).sum() / np.sqrt((A * A).sum() * (B * B).sum() + 1e-6)))
+    return float(np.mean(out)) if out else -1
+
+AFF = None; DELTA = {}
+def build_affine():
+    global AFF
+    if os.path.exists("affine.npz"):
+        z = np.load("affine.npz", allow_pickle=True); AFF = z["aff"].item()
+        for k, v in z["delta"].item().items(): DELTA[k] = v
+        return
+    shots = _shots(); want = set()
+    for t0, t1, tk, els in shots: want.update(frange(t0, t1))
+    fr = _read_frames(want)
+    AFF = {}
+    crit = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 80, 1e-5)
+    for si, (t0, t1, tk, els) in enumerate(shots):
+        idx = [j for j in frange(t0, t1) if j in fr]
+        if not idx: continue
+        k0 = min(range(len(idx)), key=lambda q: abs(idx[q] - tk * FPS))
+        K = fr[idx[k0]]
+        G = {j: cv2.GaussianBlur(cv2.cvtColor(fr[j], cv2.COLOR_RGB2GRAY).astype(np.float32), (3, 3), 0) for j in idx}
+        wmax = max(w for _, _, _, w in els)
+        x0 = int(max(0, min(cx - w / 2 for _, cx, cy, w in els) - 15)); x1 = int(min(W, max(cx + w / 2 for _, cx, cy, w in els) + 15))
+        y0 = int(max(0, min(cy for _, cx, cy, w in els) - 1.0 * wmax)); y1 = int(min(H, max(cy for _, cx, cy, w in els) + 0.25 * wmax))
+        mask = np.zeros((H, W), np.uint8); mask[y0:y1, x0:x1] = 1
+        G8 = {j: cv2.cvtColor(fr[j], cv2.COLOR_RGB2GRAY) for j in idx}
+        Gf = {j: cv2.GaussianBlur(G8[j].astype(np.float32), (3, 3), 0) for j in idx}
+        Kf = Gf[idx[k0]]; roi = [(cx, cy, w, max(8, HREL[n] * w * 1.8)) for n, cx, cy, w in els]
+        mk8 = (mask * 255).astype(np.uint8)
+        pts0 = cv2.goodFeaturesToTrack(G8[idx[k0]], 400, 0.01, 4, mask=mk8)
+        A = {idx[k0]: np.eye(2, 3, dtype=np.float32)}
+        for rng in (range(k0 + 1, len(idx)), range(k0 - 1, -1, -1)):
+            pp = pts0.copy(); pj = idx[k0]; good = np.ones(len(pp), bool); prevM = np.eye(2, 3, dtype=np.float32)
+            for q in rng:
+                j = idx[q]
+                nx, st, err = cv2.calcOpticalFlowPyrLK(G8[pj], G8[j], pp, None, winSize=(21, 21), maxLevel=3)
+                good &= st.ravel() == 1; pp = nx; pj = j
+                M = None
+                if good.sum() >= 6:
+                    M, inl = cv2.estimateAffinePartial2D(pts0[good], pp[good], method=cv2.RANSAC, ransacReprojThreshold=1.5)
+                if M is None: M = prevM
+                M = M.astype(np.float32)
+                # candidat 2 : affinage ECC initialisé par le flux optique ; on garde le meilleur
+                best = (_ncc(Kf, Gf[j], M, roi), M)
+                try:
+                    cc, M2 = cv2.findTransformECC(Kf, Gf[j], M.copy(), cv2.MOTION_AFFINE, crit, mask, 5)
+                    sc2 = _ncc(Kf, Gf[j], M2, roi)
+                    if sc2 > best[0]: best = (sc2, M2)
+                except cv2.error:
+                    pass
+                A[j] = best[1]; prevM = A[j]
+        # lissage léger des paramètres pour supprimer le bruit de l'estimation
+        js = sorted(A); P = np.array([A[j].reshape(-1) for j in js])
+        Ps = _smooth(P, a=1, b=1)
+        for q, j in enumerate(js): AFF[j] = (si, Ps[q].reshape(2, 3).astype(np.float32))
+        # correction calculée une seule fois sur l'image clé (en résolution x2)
+        K2 = np.array(Image.fromarray(K).resize((W * S, H * S), Image.LANCZOS))
+        mk = np.zeros((H * S, W * S), np.uint8)
+        R = _elem_rects(els)
+        for name, cx, cy, ww, hh_, th in R:
+            mk[int((cy - hh_ / 2) * S):int((cy + hh_ / 2) * S), int((cx - ww / 2) * S):int((cx + ww / 2) * S)] = 1
+        Kc = cv2.inpaint(K2, mk, 5, cv2.INPAINT_TELEA)
+        pim = Image.fromarray(Kc); dr = ImageDraw.Draw(pim); COLS = {}
+        for name, cx, cy, ww, hh_, th in R:
+            sub = K[int(cy - hh_ / 2):int(cy + hh_ / 2), int(cx - ww / 2):int(cx + ww / 2)].astype(int)
+            col = (120, 120, 120)
+            if sub.size:
+                L = sub.mean(2); S_ = sub.max(2) - sub.min(2); mm = (L > np.median(L) + 12) & (S_ < 60)
+                if mm.sum() > 3: col = tuple(int(v) for v in np.median(sub[mm], axis=0))
+            COLS[name] = col
+            wtxt = ww - 8
+            if name == "row":
+                for wd, rx in (("POWER", -0.38), ("ALARM", 0.0), ("FAULT", 0.38)):
+                    dr.text(((cx + rx * wtxt) * S, cy * S), wd, font=fontw(th * S, 500), fill=col, anchor="mm")
+            elif name == "gas":
+                dr.text((cx * S, cy * S), "Gas & CO Detector", font=fontw(th * S, 500), fill=col, anchor="mm")
+        Kc = np.array(pim)
+        tm = (np.abs(Kc.astype(int) - cv2.inpaint(K2, mk, 5, cv2.INPAINT_TELEA).astype(int)).sum(2) > 6).astype(np.uint8)
+        mk = mk | cv2.dilate(tm, np.ones((7, 7), np.uint8))
+        Kc2 = cv2.inpaint(K2, mk, 5, cv2.INPAINT_TELEA)
+        pim = Image.fromarray(Kc2); dr = ImageDraw.Draw(pim)
+        for name, cx, cy, ww, hh_, th in R:
+            col = COLS.get(name, (120, 120, 120)); wtxt = ww - 8
+            if name == "row":
+                for wd, rx in (("POWER", -0.38), ("ALARM", 0.0), ("FAULT", 0.38)):
+                    dr.text(((cx + rx * wtxt) * S, cy * S), wd, font=fontw(th * S, 500), fill=col, anchor="mm")
+            elif name == "gas":
+                dr.text((cx * S, cy * S), "Gas & CO Detector", font=fontw(th * S, 500), fill=col, anchor="mm")
+        Kc = np.array(pim)
+        feather = cv2.GaussianBlur(cv2.dilate(mk, np.ones((5, 5), np.uint8)).astype(np.float32), (5, 5), 0)
+        ys_, xs_ = np.where(feather > 0.01)
+        by0, by1, bx0, bx1 = ys_.min(), ys_.max() + 1, xs_.min(), xs_.max() + 1
+        DELTA[si] = (Kc[by0:by1, bx0:bx1].astype(np.uint8), feather[by0:by1, bx0:bx1].astype(np.float16), int(bx0), int(by0))
+    np.savez_compressed("affine.npz", aff=np.array(AFF, dtype=object), delta=np.array(DELTA, dtype=object))
+
+def apply_device(im, i):
+    if AFF is None: build_affine()
+    a = AFF.get(i)
+    if a is None: return im
+    si, M = a
+    P, F, ox, oy = DELTA[si]
+    M2 = M.copy(); M2[:, 2] *= S
+    # le patch est en coordonnées (ox, oy) de l'image clé x2
+    T = np.array([[1, 0, ox], [0, 1, oy], [0, 0, 1]], np.float32)
+    M3 = (np.vstack([M2, [0, 0, 1]]) @ T)[:2]
+    pw = cv2.warpAffine(P, M3, (W * S, H * S), flags=cv2.INTER_LINEAR, borderValue=0).astype(np.float32)
+    mw = cv2.warpAffine(F.astype(np.float32), M3, (W * S, H * S), flags=cv2.INTER_LINEAR, borderValue=0)[..., None]
+    arr = np.asarray(im).astype(np.float32)
+    arr = arr * (1 - mw) + pw * mw
+    return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
+
 SPEC_INFO = {}
 def precompute_specs():
     if os.path.exists("specunion.json"):
@@ -699,7 +848,7 @@ def precompute_specs():
 def process(f, i):
     t = i / FPS
     draws = []
-    f, draws = stable_device(f, i)
+    draws = []
     plains = []
     for sp in SPECS:
         if sp[2] == "plain" and sp[0] <= t <= sp[1]:
@@ -711,6 +860,7 @@ def process(f, i):
                 xs = np.where(wm.sum(0) > 0)[0]
                 plains.append(((xs.min() + xs.max()) / 2, (y0 + y1) / 2, (y1 - y0) * 0.62, sp[7]))
     im = Image.fromarray(f).resize((W * S, H * S), Image.LANCZOS)
+    im = apply_device(im, i)
     d = ImageDraw.Draw(im)
     for px, py, ph, ptxt in plains:
         ff = fontw(ph * S, 800)

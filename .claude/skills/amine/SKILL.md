@@ -87,3 +87,12 @@ L'API d'édition des segments (`/v1/dubbing/resource/...`) est en bêta fermée 
 imposer son texte. Pour changer un mot (ex. nom de produit), remplacer le mot **dans l'audio source**
 avant le doublage (voix isolée Demucs + TTS du clone en langue source à l'emplacement du mot).
 Les sous-titres se recalent ensuite sur la transcription Groq du doublage.
+
+## Remplacer un texte sur un objet qui bouge (sans glissement)
+
+Ne pas redessiner le texte à une position estimée image par image (ça glisse).
+Méthode qui colle : corriger UNE image clé (inpaint + nouveau texte, en x2), puis suivre l'objet
+(flux optique Lucas-Kanade + `estimateAffinePartial2D`, affiné par ECC quand c'est meilleur,
+choix image par image sur la corrélation des zones de texte), et coller le patch corrigé
+déformé par la transformation (`apply_device` dans `pipeline/03c_rendu_pub3.py`).
+Caler chaque plan sur ses images de coupe exactes (`cutframes.json`), sinon 1 image d'allemand passe.
