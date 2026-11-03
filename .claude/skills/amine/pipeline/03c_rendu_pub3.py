@@ -325,7 +325,7 @@ KEYS = [  # (début, fin, t_clé, [(élément, cx, cy, largeur)])  — positions
     (218.1, 220.4, 219.3, [("row", 186, 452, 228), ("gas", 183, 581, 165)]),
     (171.43, 173.17, 172.3, [("row", 182, 315, 100), ("gas", 181, 377, 72), ("logo", 182, 415, 48)]),
     (181.67, 185.3, 183.5, [("row", 182, 327, 100), ("gas", 187, 392, 86), ("logo", 184, 431, 53)]),
-    (175.13, 177.0, 175.6, [("row", 165, 335, 140), ("gas", 165, 404, 100), ("logo", 165, 445, 65)]),
+    (175.13, 177.0, 175.6, [("row", 168, 335, 112), ("gas", 165, 404, 100), ("logo", 165, 445, 65)]),
     (226.4, 230.7, 228.5, [("row", 180, 367, 72), ("gas", 180, 406, 54), ("logo", 180, 427, 36)]),
     (230.7, 232.17, 231.0, [("row", 178, 357, 55), ("gas", 182, 395, 46), ("logo", 184, 420, 33)]),
     (233.6, 236.1, 235.0, [("row", 182, 315, 93), ("gas", 179, 385, 68), ("logo", 180, 426, 49)]),
@@ -373,7 +373,7 @@ def _track(frames, k0, cx, cy, w, h):
         k = k0 + direction
         while 0 <= k < len(frames):
             g = frames[k]; best = None
-            for sc in ps * np.array([0.97, 0.985, 1.0, 1.015, 1.03]):
+            for sc in ps * np.array([0.98, 0.99, 0.995, 1.0, 1.005, 1.01, 1.02]):
                 t = cv2.resize(tpl, None, fx=sc, fy=sc, interpolation=cv2.INTER_LINEAR)
                 r = int(0.12 * w * sc + 10)
                 X0, Y0 = int(max(0, pcx - t.shape[1] / 2 - r)), int(max(0, pcy - t.shape[0] / 2 - r))
@@ -381,7 +381,15 @@ def _track(frames, k0, cx, cy, w, h):
                 win = g[Y0:Y1, X0:X1]
                 if win.shape[0] <= t.shape[0] or win.shape[1] <= t.shape[1]: continue
                 m = cv2.matchTemplate(win, t, cv2.TM_CCOEFF_NORMED); _, mv, _, ml = cv2.minMaxLoc(m)
-                if best is None or mv > best[0]: best = (mv, X0 + ml[0] + t.shape[1] / 2, Y0 + ml[1] + t.shape[0] / 2, sc)
+                dx = dy = 0.0
+                mx_, my_ = ml
+                if 0 < mx_ < m.shape[1] - 1:
+                    a_, b_, c_ = m[my_, mx_ - 1], m[my_, mx_], m[my_, mx_ + 1]; den = a_ - 2 * b_ + c_
+                    if den < 0: dx = 0.5 * (a_ - c_) / den
+                if 0 < my_ < m.shape[0] - 1:
+                    a_, b_, c_ = m[my_ - 1, mx_], m[my_, mx_], m[my_ + 1, mx_]; den = a_ - 2 * b_ + c_
+                    if den < 0: dy = 0.5 * (a_ - c_) / den
+                if best is None or mv > best[0]: best = (mv, X0 + mx_ + dx + t.shape[1] / 2, Y0 + my_ + dy + t.shape[0] / 2, sc)
             if best is not None and best[0] > 0.25:
                 pcx, pcy, ps = best[1], best[2], best[3]
             res[k] = (pcx, pcy, ps)
@@ -392,6 +400,29 @@ def _smooth(arr, a=7, b=4):
     arr = np.array(arr, dtype=float)
     med = np.array([np.median(arr[max(0, k - a):k + a + 1], axis=0) for k in range(len(arr))])
     return np.array([med[max(0, k - b):k + b + 1].mean(axis=0) for k in range(len(arr))])
+
+def _refine(gray_list, k0, xs, ys, scs, cx0, cy0, w0, h0):
+    """Recale chaque image sur le vrai texte d'origine (modèle pris sur l'image clé)."""
+    g0 = gray_list[k0]
+    tpl0 = g0[int(max(0, cy0 - h0 / 2)):int(cy0 + h0 / 2), int(max(0, cx0 - w0 / 2)):int(cx0 + w0 / 2)]
+    if tpl0.size == 0 or tpl0.std() < 2: return xs, ys
+    rx = np.zeros(len(xs)); ry = np.zeros(len(xs)); ok = np.zeros(len(xs), bool)
+    for q in range(len(xs)):
+        sc = scs[q]
+        t = cv2.resize(tpl0, None, fx=sc, fy=sc, interpolation=cv2.INTER_LINEAR)
+        mg = 6 + 0.15 * t.shape[1]
+        X0, Y0 = int(max(0, xs[q] - t.shape[1] / 2 - mg)), int(max(0, ys[q] - t.shape[0] / 2 - mg))
+        X1, Y1 = int(min(W, xs[q] + t.shape[1] / 2 + mg)), int(min(H, ys[q] + t.shape[0] / 2 + mg))
+        win = gray_list[q][Y0:Y1, X0:X1]
+        if win.shape[0] <= t.shape[0] or win.shape[1] <= t.shape[1]: continue
+        m = cv2.matchTemplate(win, t, cv2.TM_CCOEFF_NORMED); _, mv, _, ml = cv2.minMaxLoc(m)
+        if mv < 0.55: continue
+        rx[q] = X0 + ml[0] + t.shape[1] / 2 - xs[q]; ry[q] = Y0 + ml[1] + t.shape[0] / 2 - ys[q]; ok[q] = True
+    if ok.sum() < 3: return xs, ys
+    qi = np.arange(len(xs))
+    rx = np.interp(qi, qi[ok], rx[ok]); ry = np.interp(qi, qi[ok], ry[ok])
+    sm = _smooth(np.stack([rx, ry], 1), a=3, b=2)
+    return xs + sm[:, 0], ys + sm[:, 1]
 
 def build_devtrack():
     path = "devtrack.json"
@@ -422,8 +453,7 @@ def build_devtrack():
         tr = _track(gray, k0, BCX, BCY, bx1 - bx0 - 4, by1 - by0 - 4)
         seq = np.array([tr[q] for q in range(len(idx))])
         dur = len(idx) / FPS
-        cs = _polyfit(np.arange(len(idx)), seq, 1 if dur < 2.2 else (2 if dur < 4.5 else 3))
-        sm = np.stack([np.polyval(cc, np.arange(len(idx))) for cc in cs], 1)
+        sm = _smooth(seq, a=3, b=2)
         sm += np.array([BCX, BCY, 1.0]) - sm[k0]
         f0 = allf[idx[k0]]
         for name, cx, cy, w in els:
@@ -433,24 +463,34 @@ def build_devtrack():
             if sub.size:
                 L = sub.mean(2); S_ = sub.max(2) - sub.min(2); mm = (L > np.median(L) + 12) & (S_ < 60)
                 if mm.sum() > 3: col = [int(v) for v in np.median(sub[mm], axis=0)]
+            XS = sm[:, 0] + (cx - BCX) * sm[:, 2]; YS = sm[:, 1] + (cy - BCY) * sm[:, 2]
+            XS, YS = _refine(gray, k0, XS, YS, sm[:, 2], cx, cy, w + 6, max(6, HREL[name] * w * 1.6))
             for q, j in enumerate(idx):
-                gx, gy, sc = sm[q]
-                x = gx + (cx - BCX) * sc; y = gy + (cy - BCY) * sc; ww = w * sc
+                sc = sm[q, 2]
+                x = XS[q]; y = YS[q]; ww = w * sc
                 if name == "row":
-                    for wd, rx in (("Marche", -0.38), ("Alarme", 0.0), ("Défaut", 0.38)):
+                    for wd, rx in (("POWER", -0.38), ("ALARM", 0.0), ("FAULT", 0.38)):
                         out.setdefault(j, []).append([x + rx * ww, y, wd, HREL[name] * ww * 1.05, col, ww / 3 + 4])
                 elif name == "gas":
-                    out.setdefault(j, []).append([x, y, "Détecteur gaz & CO", HREL[name] * ww * 0.85, col, ww + 6])
+                    out.setdefault(j, []).append([x, y, "Gas & CO Detector", HREL[name] * ww * 0.85, col, ww + 6])
                     if len([e for e in els if e[0] == "logo"]) == 0:
-                        out.setdefault(j, []).append([x, y + 0.44 * ww, "Vigilair", 0.13 * ww, col, 0.62 * ww])
+                        out.setdefault(j, []).append([x, y + 0.44 * ww, "", 0.13 * ww, col, 0.62 * ww])
                 else:
-                    out.setdefault(j, []).append([x, y, "Vigilair", HREL[name] * ww * 0.9, col, ww + 6])
+                    out.setdefault(j, []).append([x, y, "", HREL[name] * ww * 0.9, col, ww + 6])
     for t0, t1, ta, tb, els in LINEAR:
-        for j in frange(t0, t1):
+        jl = [j for j in frange(t0, t1) if j in allf]
+        gl = [cv2.cvtColor(allf[j], cv2.COLOR_RGB2GRAY).astype(np.float32) for j in jl]
+        ka = min(range(len(jl)), key=lambda q: abs(jl[q] - ta * FPS))
+        REF = {}
+        for name, xa, ya, wa, xb, yb, wb in els:
+            us = np.array([min(1, max(0, (j / FPS - ta) / (tb - ta))) for j in jl])
+            XS = xa + us * (xb - xa); YS = ya + us * (yb - ya); SC = (wa + us * (wb - wa)) / wa
+            REF[name] = _refine(gl, ka, XS, YS, SC, XS[ka], YS[ka], wa + 6, max(6, HREL[name] * wa * 1.6))
+        for qq, j in enumerate(jl):
             u = min(1, max(0, (j / FPS - ta) / (tb - ta)))
             f0 = allf.get(j)
             for name, xa, ya, wa, xb, yb, wb in els:
-                x = xa + u * (xb - xa); y = ya + u * (yb - ya); ww = wa + u * (wb - wa)
+                x = REF[name][0][qq]; y = REF[name][1][qq]; ww = wa + u * (wb - wa)
                 col = [120, 120, 120]
                 if f0 is not None:
                     h = HREL[name] * ww * 1.4
@@ -459,12 +499,12 @@ def build_devtrack():
                         L = sub.mean(2); S_ = sub.max(2) - sub.min(2); mm = (L > np.median(L) + 12) & (S_ < 60)
                         if mm.sum() > 3: col = [int(v) for v in np.median(sub[mm], axis=0)]
                 if name == "row":
-                    for wd, rx in (("Marche", -0.38), ("Alarme", 0.0), ("Défaut", 0.38)):
+                    for wd, rx in (("POWER", -0.38), ("ALARM", 0.0), ("FAULT", 0.38)):
                         out.setdefault(j, []).append([x + rx * ww, y, wd, HREL[name] * ww * 1.05, col, ww / 3 + 4])
                 elif name == "gas":
-                    out.setdefault(j, []).append([x, y, "Détecteur gaz & CO", HREL[name] * ww * 0.85, col, ww + 6])
+                    out.setdefault(j, []).append([x, y, "Gas & CO Detector", HREL[name] * ww * 0.85, col, ww + 6])
                 else:
-                    out.setdefault(j, []).append([x, y, "Vigilair", HREL[name] * ww * 0.9, col, ww + 6])
+                    out.setdefault(j, []).append([x, y, "", HREL[name] * ww * 0.9, col, ww + 6])
     json.dump(out, open(path, "w"))
     return out
 
@@ -476,7 +516,7 @@ def stable_device(f, i):
     if not els: return f, []
     mask = np.zeros((H, W), np.uint8); draws = []
     for cx, cy, wd, hh, col, wb in els:
-        w = wb * 1.15; h = 1.9 * hh
+        w = wb * 1.0; h = 1.8 * hh
         x0, x1 = int(max(0, cx - w / 2)), int(min(W, cx + w / 2)); y0, y1 = int(max(0, cy - h / 2)), int(min(H, cy + h / 2))
         if x1 - x0 < 3 or y1 - y0 < 3: continue
         mask[y0:y1, x0:x1] = 1
@@ -676,7 +716,7 @@ def process(f, i):
         ff = fontw(ph * S, 800)
         d.text((px * S, py * S), ptxt, font=ff, fill=(255, 255, 255), anchor="mm", stroke_width=int(1.5 * S), stroke_fill=(20, 20, 40))
     for cx, cy, wd, hh, col in draws:
-        d.text((cx * S, cy * S), wd, font=fontw(hh * S, 500), fill=tuple(col), anchor="mm")
+        if wd: d.text((cx * S, cy * S), wd, font=fontw(hh * S, 500), fill=tuple(col), anchor="mm")
     for k_, sp in enumerate(SPECS):
         if not (sp[0] <= t <= sp[1]) or sp[2] == "plain": continue
         if not SPEC_INFO: precompute_specs()
