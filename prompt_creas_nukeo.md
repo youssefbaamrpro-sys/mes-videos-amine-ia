@@ -1,4 +1,4 @@
-Tu vas créer 5 publicités vidéo verticales (9:16, 1080x1920) pour mon produit **Nukéo™**, vendu sur ma boutique **Zyxonda** (zyxonda.com). Utilise ta méthode habituelle : texte, voix ElevenLabs (voix française naturelle), images et clips Replicate, montage ffmpeg, sous-titres incrustés.
+Tu vas créer 6 publicités vidéo verticales (9:16, 1080x1920) pour mon produit **Nukéo™**, vendu sur ma boutique **Zyxonda** (zyxonda.com). Utilise ta méthode habituelle : texte, voix ElevenLabs (voix française naturelle), images et clips Replicate, montage ffmpeg, sous-titres incrustés.
 
 ## Le produit (seules infos autorisées)
 - Nukéo™ : appareil de massage cervical 3-en-1 qu'on place sous la nuque, allongé, 15 minutes par jour.
@@ -98,6 +98,28 @@ Structure :
 9. Garantie 30 jours : « si ça ne vous soulage pas, on vous rembourse ».
 10. « Le problème n'a peut-être jamais été dans votre omoplate. Cliquez sur le lien et profitez de -65 % aujourd'hui. » Puis l'écran de fin.
 
+## VIDÉO 6 — « La tension à la base du crâne » (réaliste, environ 2 min 30)
+Style : images réalistes, façon vidéo filmée au téléphone. Un **présentateur** d'environ 50 ans en chemise, dans un bureau clair. **Pas de blouse blanche, pas de stéthoscope, pas de « Dr » ni de faux diplômes** : il ne doit pas se faire passer pour un médecin.
+Scènes : des personnes qui se tiennent la nuque (cuisine, bureau, devant un ordinateur), une vue anatomique de la base du crâne avec les petits muscles en rouge et le nerf qui remonte vers l'œil et la tempe, une femme qui prend un cachet, un mur fissuré qu'on repeint, puis une démonstration de Nukéo (gros plan sur l'appareil, une personne qui s'allonge et choisit la chaleur et le massage), et une femme souriante qui déballe son colis sur un canapé.
+Structure de la voix off :
+1. Accroche : « Ces maux de tête qui partent de la nuque, beaucoup de gens les prennent pour des migraines. Mais la tension commence souvent plus bas : à la base du crâne. »
+2. Les signes : pression à la base du crâne, mal de tête qui part de la nuque, tension qui remonte vers l'œil, la tempe ou la mâchoire. « Vous n'êtes pas seul. »
+3. Explication : posture, écrans et stress crispent les petits muscles à la base du crâne (les sous-occipitaux), qui peuvent irriter le nerf qui les traverse. La gêne peut alors remonter vers l'œil et la tempe, et tourner la tête ou travailler à l'écran peut la réveiller.
+4. « Les cachets calment pour quelques heures, mais ne détendent pas cette zone. C'est comme repeindre un mur fissuré. »
+5. Nukéo : 3 actions sous la nuque, 15 minutes par jour, allongé. Un étirement doux qui soulage la base du crâne, une chaleur qui détend les muscles, un massage ciblé qui va sur ces petits muscles.
+6. Mode d'emploi : « Allongez-vous, la nuque posée sur Nukéo, choisissez la chaleur et le massage, et détendez-vous. »
+7. Phrase obligatoire : « Si vos maux de tête sont fréquents ou intenses, parlez-en d'abord à votre médecin. Nukéo est un appareil de bien-être, pas un traitement. »
+8. Fin : « -65 % aujourd'hui, avec le programme 90 jours, l'e-book et la livraison offerts. Et 30 jours pour l'essayer, satisfait ou remboursé. » Puis l'écran de fin.
+
+**À ne pas reprendre de la vidéo d'origine :**
+- le faux médecin ;
+- les « essais cliniques » et les résultats chiffrés (« en 6 semaines… », « la plupart des utilisateurs… ») ;
+- les témoignages clients joués par des acteurs ou générés par IA (c'est interdit en France si on les présente comme de vrais clients) ;
+- le bâtiment de la marque ;
+- « stopper les maux de tête à la source », « sans médicaments à vie », « vous sentirez la différence dès la première séance » ;
+- « 51 % de réduction » (c'est -65 %).
+Quand j'aurai de **vrais** avis clients filmés, on pourra les ajouter.
+
 ---
 
-Commence par la vidéo 2 (la plus courte). Montre-moi le script final, puis 3 images clés, avant de générer les voix et le montage. Ensuite, fais les autres vidéos dans l'ordre : 1, 3, 4, 5.
+Commence par la vidéo 2 (la plus courte). Montre-moi le script final, puis 3 images clés, avant de générer les voix et le montage. Ensuite, fais les autres vidéos dans l'ordre : 1, 3, 4, 5, 6.
