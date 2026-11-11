@@ -11,6 +11,7 @@ Tu vas créer 6 publicités vidéo verticales (9:16, 1080x1920) pour mon produit
 
 ## Règles d'honnêteté (obligatoires dans les 5 vidéos)
 - Ne jamais citer une autre marque (pas de « Cervéa », pas de « Doctinolab »).
+- La marque, c'est **Zyxonda** et le produit **Nukéo™**. Quand la vidéo d'origine cite sa marque (« Doctinolab le garantit », « Doctinolab le fabrique »…), dis « Zyxonda » à la place, mais seulement pour des choses vraies : la garantie 30 jours, la livraison offerte, les cadeaux. Tout logo, colis, sac ou bâtiment visible porte le nom Zyxonda, jamais une autre marque.
 - Pas de chiffres inventés : pas de « 106 400 clients », pas de « 110 000 avis », pas de « rupture 12 fois ».
 - Pas de fausse rareté : pas de « petite série », pas de « réassort dans 4 à 6 semaines », pas de compte à rebours. À la place : « Profitez de -65 % aujourd'hui ».
 - Pas d'histoire inventée : pas de « des kinés français/allemands ont conçu l'appareil ». Tu peux dire : « Nukéo reprend en un seul appareil les 3 approches qu'on retrouve souvent en cabinet : étirement, chaleur, massage ».
@@ -20,7 +21,7 @@ Tu vas créer 6 publicités vidéo verticales (9:16, 1080x1920) pour mon produit
 - Garantie : toujours 30 jours (jamais 100 jours).
 
 ## Écran de fin commun (3 à 4 s)
-Le produit sur fond propre, puis le texte « Nukéo™ — -65 % aujourd'hui », « Programme 90 jours + e-book offerts », « Livraison offerte · 30 jours satisfait ou remboursé ». Bouton vert « Découvrir Nukéo ».
+Logo **Zyxonda** en haut, le produit Nukéo sur fond propre, puis le texte « Nukéo™ — -65 % aujourd'hui », « Programme 90 jours + e-book offerts », « Livraison offerte · 30 jours satisfait ou remboursé ». Bouton vert « Découvrir Nukéo », et **zyxonda.com** en petit en dessous.
 
 ## Style commun
 - Sous-titres : texte blanc gras dans une pastille sombre arrondie, au centre-bas, 3 à 6 mots à la fois, synchronisés sur la voix. Un mot-clé en couleur (vert ou jaune) de temps en temps.
@@ -40,7 +41,7 @@ Structure de la voix off :
 6. Les 3 approches qu'on retrouve en cabinet (étirement doux du cou, chaleur, massage ciblé), mais plusieurs séances par semaine, à 80-150 € la séance.
 7. Présentation de Nukéo : les 3 en un, 15 min par jour chez soi.
 8. Ce que beaucoup ressentent : semaine 1, un peu moins de raideur ; semaine 2, les épaules roulent plus librement ; 30 jours, la nuque plus détendue.
-9. Garantie 30 jours, offre -65 % et cadeaux, puis l'écran de fin.
+9. « Et Zyxonda vous laisse 30 jours pour l'essayer, satisfait ou remboursé. » Offre -65 % et cadeaux, puis l'écran de fin.
 
 ## VIDÉO 2 — « Ce qui se passe en 15 minutes » (réaliste, environ 1 min 40)
 Style : démonstration produit. Gros plan sur le bouton, femme qui s'allonge, effet de chaleur orange autour de la nuque, rayons lumineux sur les épaules, vue « rayons X » des cervicales qui s'étirent, femme qui tourne la tête librement en souriant, femme au bureau qui se redresse, puis qui s'endort sur Nukéo.
@@ -80,7 +81,7 @@ Structure :
 5. Les 3 approches en cabinet : 2 à 3 séances par semaine, 80-120 € la séance. Le Nerf : « Presque personne ne tient. C'est ce qu'on croyait… »
 6. Arrivée de Nukéo, que les personnages craignent : « Il fait les trois en même temps. 15 minutes par jour, allongé. »
 7. Semaine 1, semaine 2, 30 jours, au conditionnel. Le Nœud et le Nerf « se font mettre dehors ».
-8. Garantie 30 jours : « le risque, c'est pour eux, pas pour vous ».
+8. Garantie : « Zyxonda vous laisse 30 jours pour l'essayer. Le risque, c'est pour eux, pas pour vous. »
 9. Fin comique, le Nœud : « Mon dernier espoir ? Que vous ne cliquiez pas sur le lien… -65 % aujourd'hui. » Puis l'écran de fin.
 Ne pas reprendre « Doctinolab », « petite série » ni « s'associer à des kinés ».
 
@@ -100,7 +101,7 @@ Structure :
 
 ## VIDÉO 6 — « La tension à la base du crâne » (réaliste, environ 2 min 30)
 Style : images réalistes, façon vidéo filmée au téléphone. Un **présentateur** d'environ 50 ans en chemise, dans un bureau clair. **Pas de blouse blanche, pas de stéthoscope, pas de « Dr » ni de faux diplômes** : il ne doit pas se faire passer pour un médecin.
-Scènes : des personnes qui se tiennent la nuque (cuisine, bureau, devant un ordinateur), une vue anatomique de la base du crâne avec les petits muscles en rouge et le nerf qui remonte vers l'œil et la tempe, une femme qui prend un cachet, un mur fissuré qu'on repeint, puis une démonstration de Nukéo (gros plan sur l'appareil, une personne qui s'allonge et choisit la chaleur et le massage), et une femme souriante qui déballe son colis sur un canapé.
+Scènes : des personnes qui se tiennent la nuque (cuisine, bureau, devant un ordinateur), une vue anatomique de la base du crâne avec les petits muscles en rouge et le nerf qui remonte vers l'œil et la tempe, une femme qui prend un cachet, un mur fissuré qu'on repeint, puis une démonstration de Nukéo (gros plan sur l'appareil, une personne qui s'allonge et choisit la chaleur et le massage), et une femme souriante qui déballe son colis **Zyxonda** sur un canapé.
 Structure de la voix off :
 1. Accroche : « Ces maux de tête qui partent de la nuque, beaucoup de gens les prennent pour des migraines. Mais la tension commence souvent plus bas : à la base du crâne. »
 2. Les signes : pression à la base du crâne, mal de tête qui part de la nuque, tension qui remonte vers l'œil, la tempe ou la mâchoire. « Vous n'êtes pas seul. »
